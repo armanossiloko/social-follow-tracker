@@ -148,12 +148,19 @@
   };
   const match = (u, q) => !q || u.includes(q) || (people[u]?.name ?? "").toLowerCase().includes(q);
 
+  // Sort by display name (falling back to the username), A–Z with locale-aware accents; dated tabs go newest day first.
+  const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+  const byName = (a, b) => collator.compare(people[a]?.name || a, people[b]?.name || b) || collator.compare(a, b);
+  const sortNames = (list) => [...list].sort(byName);
+  const dayStart = (iso) => new Date(iso).setHours(0, 0, 0, 0);
+  const sortEvents = (list) => [...list].sort((a, b) => dayStart(b.at) - dayStart(a.at) || byName(a.username, b.username));
+
   const TABS = [
     {
       id: "lost", label: "Unfollowed you", count: losses.length,
       desc: "Found by comparing each snapshot with the one before it.",
       empty: data.snapshotCount < 2 ? "Shows up after the second snapshot." : "Nobody so far.",
-      rows: (q) => losses.filter((e) => match(e.username, q)),
+      rows: (q) => sortEvents(losses.filter((e) => match(e.username, q))),
       head: ["Who", "What happened", "When", "Now"],
       row: (e) => {
         const isNew = latest && e.at === latest.takenAt;
@@ -163,28 +170,28 @@
     {
       id: "notFollowingBack", label: "Not following you back", count: lists.notFollowingBack.length,
       desc: "You follow them, they don't follow you.", empty: "Everyone you follow follows you back.",
-      rows: (q) => lists.notFollowingBack.filter((u) => match(u, q)),
+      rows: (q) => sortNames(lists.notFollowingBack.filter((u) => match(u, q))),
       head: ["Who", "Name", "You followed"],
       row: (u) => [link(u), esc(people[u]?.name), esc(sinceText(people[u]?.youFollowSince))],
     },
     {
       id: "fans", label: "You don't follow back", count: lists.fans.length,
       desc: "They follow you, you don't follow them.", empty: "You follow back everyone who follows you.",
-      rows: (q) => lists.fans.filter((u) => match(u, q)),
+      rows: (q) => sortNames(lists.fans.filter((u) => match(u, q))),
       head: ["Who", "Name", "Followed you"],
       row: (u) => [link(u), esc(people[u]?.name), esc(sinceText(people[u]?.followsYouSince))],
     },
     {
       id: "mutual", label: "Mutual", count: lists.mutual.length,
       desc: "You follow each other.", empty: "No mutual follows.",
-      rows: (q) => lists.mutual.filter((u) => match(u, q)),
+      rows: (q) => sortNames(lists.mutual.filter((u) => match(u, q))),
       head: ["Who", "Name", "Follows you since"],
       row: (u) => [link(u), esc(people[u]?.name), esc(sinceText(people[u]?.followsYouSince))],
     },
     {
       id: "history", label: "History", count: events.length,
-      desc: "Every change between snapshots, newest first.", empty: "Shows up after the second snapshot.",
-      rows: (q) => events.filter((e) => match(e.username, q) || (e.previousUsername ?? "").includes(q)),
+      desc: "Every change between snapshots, newest day first.", empty: "Shows up after the second snapshot.",
+      rows: (q) => sortEvents(events.filter((e) => match(e.username, q) || (e.previousUsername ?? "").includes(q))),
       head: ["When", "Who", "Change"],
       row: (e) => [esc(day(e.at)), link(e.username),
         e.kind === "renamed" ? `renamed from @${esc(e.previousUsername)}` : esc(HISTORY[e.kind])],
