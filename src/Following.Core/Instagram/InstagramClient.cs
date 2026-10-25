@@ -1,5 +1,7 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Following.Core.Instagram;
 
@@ -30,7 +32,7 @@ public sealed class InstagramClient
     private readonly string? _csrfToken;
     private readonly Func<TimeSpan, Task> _delay;
     private readonly (double Min, double Max) _pause;
-    private readonly Log _log;
+    private readonly ILogger _log;
     private int _requests;
 
     public string UserId { get; }
@@ -41,7 +43,7 @@ public sealed class InstagramClient
         HttpMessageHandler? handler = null,
         Func<TimeSpan, Task>? delay = null,
         (double Min, double Max)? pauseSeconds = null,
-        Log? log = null)
+        ILogger? logger = null)
     {
         _sessionId = sessionId.Trim();
         _csrfToken = string.IsNullOrWhiteSpace(csrfToken) ? null : csrfToken.Trim();
@@ -59,7 +61,7 @@ public sealed class InstagramClient
         };
         _delay = delay ?? (t => Task.Delay(t));
         _pause = pauseSeconds ?? (2.5, 6.0);
-        _log = log ?? Log.Null;
+        _log = logger ?? NullLogger.Instance;
     }
 
     /// <summary>The sessionid cookie starts with the numeric user id: "&lt;id&gt;%3A&lt;token&gt;%3A...".</summary>
@@ -82,7 +84,7 @@ public sealed class InstagramClient
         }
         catch (InstagramException e) when (e is not SessionExpiredException and not RateLimitedException)
         {
-            _log.Warn($"Could not read profile counts ({e.Message}); skipping the completeness check.");
+            _log.LogWarning("Could not read profile counts ({Error}); skipping the completeness check.", e.Message);
             return (null, null);
         }
         catch (KeyNotFoundException)
@@ -118,7 +120,7 @@ public sealed class InstagramClient
                 ? next.ToString()
                 : null;
             if (maxId is { Length: 0 }) maxId = null;
-            _log.Info($"  {kind}: {people.Count} so far");
+            _log.LogInformation("{Kind}: {Count} so far", kind, people.Count);
         } while (maxId is not null);
         return [.. people.Values];
     }
@@ -145,7 +147,7 @@ public sealed class InstagramClient
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
             {
                 if (attempt == 2) throw new InstagramException($"Network error: {e.Message}");
-                _log.Warn($"Network error ({e.Message}); retrying in 30s.");
+                _log.LogWarning("Network error ({Error}); retrying in 30s.", e.Message);
                 await _delay(TimeSpan.FromSeconds(30));
                 continue;
             }

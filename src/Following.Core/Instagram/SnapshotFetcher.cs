@@ -1,19 +1,22 @@
+using Microsoft.Extensions.Logging;
+
 namespace Following.Core.Instagram;
 
 public static class SnapshotFetcher
 {
-    public static async Task<Snapshot> FetchAsync(InstagramClient client, Snapshot? previous, Log log, CancellationToken ct = default)
+    public static async Task<Snapshot> FetchAsync(
+        InstagramClient client, (int Followers, int Following)? previousCounts, ILogger log, CancellationToken ct = default)
     {
         var (followersExpected, followingExpected) = await client.GetProfileCountsAsync(ct);
         var takenAt = DateTimeOffset.UtcNow;
-        log.Info("Fetching followers...");
+        log.LogInformation("Fetching followers...");
         var followers = await client.GetListAsync(FollowList.Followers, ct);
-        log.Info("Fetching following...");
+        log.LogInformation("Fetching following...");
         var following = await client.GetListAsync(FollowList.Following, ct);
 
         // A truncated list would show up as a wave of fake "unfollowed you" events, so refuse to save it.
-        Check("followers", followers.Count, followersExpected, previous?.Followers.Count);
-        Check("following", following.Count, followingExpected, previous?.Following.Count);
+        Check("followers", followers.Count, followersExpected, previousCounts?.Followers);
+        Check("following", following.Count, followingExpected, previousCounts?.Following);
 
         return new Snapshot
         {

@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using Following.Core;
 using Following.Core.Instagram;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Following.Tests;
 
@@ -90,7 +91,7 @@ public class InstagramClientTests
             Json("""{"users": [{"pk": 1, "username": "ann"}], "status": "ok"}"""),
             Json("""{"users": [{"pk": 1, "username": "ann"}], "status": "ok"}"""));
 
-        var e = await Assert.ThrowsAsync<IncompleteFetchException>(() => SnapshotFetcher.FetchAsync(Client(handler), null, Log.Null));
+        var e = await Assert.ThrowsAsync<IncompleteFetchException>(() => SnapshotFetcher.FetchAsync(Client(handler), null, NullLogger.Instance));
         Assert.Contains("profile says 100", e.Message);
     }
 
@@ -102,7 +103,7 @@ public class InstagramClientTests
             Json("""{"users": [{"pk": 1, "username": "ann"}, {"pk": 2, "username": "ben"}], "status": "ok"}"""),
             Json("""{"users": [{"pk": 2, "username": "ben"}], "status": "ok"}"""));
 
-        var snap = await SnapshotFetcher.FetchAsync(Client(handler), null, Log.Null);
+        var snap = await SnapshotFetcher.FetchAsync(Client(handler), null, NullLogger.Instance);
 
         Assert.Equal(SnapshotSource.Fetch, snap.Source);
         Assert.Equal(2, snap.Followers.Count);

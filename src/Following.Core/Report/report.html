@@ -54,6 +54,8 @@
   .sheet { max-width: 1160px; margin: 0 auto; padding: 28px 32px 64px; }
 
   /* ---------- masthead ---------- */
+  .ears a, .foot a { color: inherit; text-underline-offset: 3px; }
+  .ears a:hover, .foot a:hover { color: var(--ink); }
   .ears {
     display: flex; justify-content: space-between; gap: 16px;
     font: 500 12px/1 var(--label); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft);
@@ -293,7 +295,7 @@
 
   // ---------- masthead ----------
   $("ear-left").textContent = data.account ? `@${data.account}` : "Your account";
-  $("ear-right").textContent = `${plural(data.snapshotCount, "snapshot", "snapshots")} on file`;
+  $("ear-right").innerHTML = `${esc(plural(data.snapshotCount, "snapshot", "snapshots"))} on file · <a href="settings">Settings</a>`;
   $("dateline-date").innerHTML = `<b>${esc(longDay(data.generatedAt))}</b>`;
   $("dateline-src").textContent = latest
     ? `Data as of ${day(latest.takenAt)}, ${time(latest.takenAt)} · ${latest.source === "fetch" ? "auto-fetched" : "from export " + (latest.sourceRef ?? "")}`
@@ -603,7 +605,8 @@
   // ---------- footer ----------
   $("foot-left").innerHTML = `Generated ${esc(day(data.generatedAt))}, ${esc(time(data.generatedAt))}` +
     (data.firstSnapshotAt ? ` · tracking since ${esc(day(data.firstSnapshotAt))}` : "");
-  $("foot-right").innerHTML = `Data: <code>${esc(data.dataDir)}</code>`;
+  $("foot-right").innerHTML = (data.nextRunAt ? `Next run ${esc(day(data.nextRunAt))}, ${esc(time(data.nextRunAt))} · ` : "") +
+    `<a href="settings">Settings</a>`;
 })();
 </script>
 </body>

@@ -20,40 +20,48 @@ public static partial class ExportReader
     [GeneratedRegex(@"^followers(_\d+)?\.json$", RegexOptions.IgnoreCase)]
     private static partial Regex FollowersFile();
 
+    /// <summary>Load from an export .zip or an extracted export folder on disk.</summary>
     public static Snapshot Load(string path)
     {
-        Dictionary<string, string> files = [];
-        DateTimeOffset takenAt;
         if (Directory.Exists(path))
         {
-            takenAt = Directory.GetLastWriteTimeUtc(path);
+            Dictionary<string, string> files = [];
             foreach (var file in Directory.EnumerateFiles(path, "*.json", SearchOption.AllDirectories))
                 if (IsWanted(Path.GetRelativePath(path, file)))
                     files[Path.GetFileName(file).ToLowerInvariant()] = File.ReadAllText(file);
+            return Parse(files, Directory.GetLastWriteTimeUtc(path), Path.GetFileName(path));
         }
-        else if (File.Exists(path))
+        if (!File.Exists(path)) throw new ExportException($"{path} does not exist.");
+        using var stream = File.OpenRead(path);
+        return LoadZip(stream, Path.GetFileName(path), File.GetLastWriteTimeUtc(path));
+    }
+
+    /// <summary>
+    /// Load from a zip stream (e.g. an upload). The snapshot is dated by the newest relevant file inside the zip,
+    /// which is when Instagram generated the export; <paramref name="fallbackTakenAt"/> is used if that's missing.
+    /// </summary>
+    public static Snapshot LoadZip(Stream zipStream, string name, DateTimeOffset fallbackTakenAt)
+    {
+        Dictionary<string, string> files = [];
+        DateTimeOffset? newest = null;
+        try
         {
-            takenAt = File.GetLastWriteTimeUtc(path);
-            try
+            using var zip = new ZipArchive(zipStream, ZipArchiveMode.Read, leaveOpen: true);
+            foreach (var entry in zip.Entries)
             {
-                using var zip = ZipFile.OpenRead(path);
-                foreach (var entry in zip.Entries)
-                {
-                    if (!IsWanted(entry.FullName)) continue;
-                    using var reader = new StreamReader(entry.Open());
-                    files[entry.Name.ToLowerInvariant()] = reader.ReadToEnd();
-                }
-            }
-            catch (InvalidDataException)
-            {
-                throw new ExportException($"{path} is not a valid zip file.");
+                if (!IsWanted(entry.FullName)) continue;
+                using var reader = new StreamReader(entry.Open());
+                files[entry.Name.ToLowerInvariant()] = reader.ReadToEnd();
+                if (newest is null || entry.LastWriteTime > newest) newest = entry.LastWriteTime;
             }
         }
-        else
+        catch (InvalidDataException)
         {
-            throw new ExportException($"{path} does not exist.");
+            throw new ExportException($"{name} is not a valid zip file.");
         }
-        return Parse(files, new DateTimeOffset(takenAt.UtcDateTime, TimeSpan.Zero), Path.GetFileName(path));
+        // Zip timestamps are optional (DOS epoch 1980 when absent) and carry no time zone; ignore implausible ones.
+        var takenAt = newest is { Year: >= 2010 } t && t <= DateTimeOffset.UtcNow.AddDays(1) ? t : fallbackTakenAt;
+        return Parse(files, takenAt.ToUniversalTime(), name);
     }
 
     /// <summary>Quick check used when scanning Downloads: does this zip hold follower data?</summary>
@@ -73,8 +81,10 @@ public static partial class ExportReader
     public static string Sha256(string path)
     {
         using var stream = File.OpenRead(path);
-        return Convert.ToHexStringLower(SHA256.HashData(stream));
+        return Sha256(stream);
     }
+
+    public static string Sha256(Stream stream) => Convert.ToHexStringLower(SHA256.HashData(stream));
 
     /// <param name="files">Lower-cased file name to JSON text.</param>
     internal static Snapshot Parse(Dictionary<string, string> files, DateTimeOffset takenAt, string sourceRef)

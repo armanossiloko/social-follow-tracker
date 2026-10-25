@@ -1,36 +1,55 @@
 using System.Reflection;
 using System.Text.Json;
-using Following.Core.Storage;
+using System.Text.Json.Serialization;
 
 namespace Following.Core.Report;
 
-/// <summary>Renders the self-contained report.html: the page template with all data embedded as JSON.</summary>
+public sealed record ReportWarning(string Level, string Title, string Detail);
+
+/// <summary>Outcome of the most recent run of some kind, as shown on the report.</summary>
+public sealed record RunSummary(DateTimeOffset At, bool Ok, string Message);
+
+/// <summary>Everything the report page needs besides the snapshots themselves.</summary>
+public sealed record ReportContext(
+    IReadOnlyList<Snapshot> Snapshots,
+    string? Account,
+    bool HasSession,
+    RunSummary? LastFetch,
+    RunSummary? LastOkFetch,
+    DateTimeOffset? NextRunAt,
+    DateTimeOffset Now);
+
+/// <summary>Renders the report page: the HTML template with all data embedded as JSON.</summary>
 public static class ReportBuilder
 {
     private const string Placeholder = "__REPORT_DATA__";
     private const int MaxEvents = 5000;
-    private static readonly JsonSerializerOptions CompactJson = new(Json.Options) { WriteIndented = false };
 
-    public sealed record Warning(string Level, string Title, string Detail);
-
-    public static string Write(AppPaths paths, IReadOnlyList<Snapshot> snapshots, AppConfig config, AppState state, DateTimeOffset now)
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
-        var html = Render(BuildData(snapshots, config, state, paths, now));
-        var tmp = paths.Report + ".tmp";
-        File.WriteAllText(tmp, html);
-        File.Move(tmp, paths.Report, overwrite: true);
-        return paths.Report;
-    }
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    private static readonly Lazy<string> TemplateHtml = new(() =>
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Following.Core.report.html")
+                           ?? throw new InvalidOperationException("report.html resource missing");
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    });
+
+    public static string Render(ReportContext context) => Render(BuildData(context));
 
     internal static string Render(object data)
     {
         // The default encoder escapes <, > and &, so the JSON can't close the <script> tag it sits in.
-        var json = JsonSerializer.Serialize(data, CompactJson);
-        return Template().Replace(Placeholder, json, StringComparison.Ordinal);
+        var json = JsonSerializer.Serialize(data, JsonOptions);
+        return TemplateHtml.Value.Replace(Placeholder, json, StringComparison.Ordinal);
     }
 
-    internal static object BuildData(IReadOnlyList<Snapshot> snapshots, AppConfig config, AppState state, AppPaths paths, DateTimeOffset now)
+    internal static object BuildData(ReportContext context)
     {
+        var snapshots = context.Snapshots;
         var latest = snapshots.Count > 0 ? snapshots[^1] : null;
         var history = Diff.BuildHistory(snapshots);
         var relationships = latest is null ? new Relationships([], [], []) : Diff.Relate(latest);
@@ -59,9 +78,9 @@ public static class ReportBuilder
 
         return new
         {
-            GeneratedAt = now,
-            Account = config.Username,
-            DataDir = paths.Root,
+            GeneratedAt = context.Now,
+            context.Account,
+            context.NextRunAt,
             SnapshotCount = snapshots.Count,
             FirstSnapshotAt = snapshots.Count > 0 ? snapshots[0].TakenAt : (DateTimeOffset?)null,
             Latest = latest is null ? null : new
@@ -76,7 +95,7 @@ public static class ReportBuilder
             },
             PreviousAt = snapshots.Count > 1 ? snapshots[^2].TakenAt : (DateTimeOffset?)null,
             LastChanges = Count(lastChanges),
-            Warnings = Warnings(latest, config, state, now),
+            Warnings = Warnings(latest, context),
             Lists = relationships,
             People = people,
             Events = history.Events.AsEnumerable().Reverse().Take(MaxEvents)
@@ -100,38 +119,28 @@ public static class ReportBuilder
 
     private static string KindName(EventKind kind) => JsonNamingPolicy.CamelCase.ConvertName(kind.ToString());
 
-    internal static List<Warning> Warnings(Snapshot? latest, AppConfig config, AppState state, DateTimeOffset now)
+    internal static List<ReportWarning> Warnings(Snapshot? latest, ReportContext context)
     {
-        var warnings = new List<Warning>();
-        var lastFetch = state.LastRun(RunKind.Fetch);
-        if (config.HasSession && lastFetch is { Ok: false })
+        var warnings = new List<ReportWarning>();
+        if (context.HasSession && context.LastFetch is { Ok: false } failed)
         {
-            var lastOk = state.LastOkRun(RunKind.Fetch);
-            var since = lastOk is null ? "No fetch has succeeded yet." : $"Last successful fetch: {lastOk.At:yyyy-MM-dd}.";
-            warnings.Add(new("error", "The daily fetch failed", $"{lastFetch.Message} {since}"));
+            var since = context.LastOkFetch is { } ok ? $"Last successful fetch: {ok.At:yyyy-MM-dd}." : "No fetch has succeeded yet.";
+            warnings.Add(new("error", "The daily fetch failed", $"{failed.Message} {since}"));
         }
         if (latest is null)
         {
             warnings.Add(new("info", "No data yet",
-                config.HasSession
-                    ? "Run `following fetch` to take the first snapshot."
-                    : "Run `following login` for automatic daily fetches, or `following import <export.zip>`."));
+                context.HasSession
+                    ? "The first snapshot is taken on the next run; use Fetch now on the Settings page to take it right away."
+                    : "Paste your Instagram session cookie on the Settings page for daily fetches, or upload an export there."));
         }
-        else if (now - latest.TakenAt > TimeSpan.FromDays(3))
+        else if (context.Now - latest.TakenAt > TimeSpan.FromDays(3))
         {
-            warnings.Add(new("warn", $"This data is {(int)(now - latest.TakenAt).TotalDays} days old",
-                config.HasSession
-                    ? "Daily fetches haven't produced a snapshot recently; check following.log."
-                    : "Request a fresh Instagram export; any instagram-*.zip in Downloads is picked up automatically."));
+            warnings.Add(new("warn", $"This data is {(int)(context.Now - latest.TakenAt).TotalDays} days old",
+                context.HasSession
+                    ? "Daily fetches haven't produced a snapshot recently; the Settings page shows recent runs."
+                    : "Upload a fresh Instagram export on the Settings page, or drop it into the watched folder."));
         }
         return warnings;
-    }
-
-    private static string Template()
-    {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Following.Core.report.html")
-                           ?? throw new InvalidOperationException("report.html resource missing");
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
     }
 }
