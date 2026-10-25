@@ -24,7 +24,7 @@ services:
         condition: service_healthy
     # Only reachable from this PC. The page shows your follower data and can replace the stored cookie.
     ports:
-      - "127.0.0.1:${PORT:-8080}:8080"
+      - "127.0.0.1:${PORT:-47321}:8080"
     environment:
       ConnectionStrings__Following: "Host=db;Database=following;Username=following;Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
       TZ: ${TZ:-UTC}

@@ -36,10 +36,10 @@ public static class SettingsPage
         var token = $"""<input type="hidden" name="{HtmlEncode(m.Antiforgery.FormFieldName)}" value="{HtmlEncode(m.Antiforgery.RequestToken)}">""";
         var failedFetch = m.HasSession && m.LastFetch is { Ok: false };
         var sessionStatus = !m.HasSession
-            ? """<p class="status"><span class="dot"></span>No cookie stored <small>exports only</small></p>"""
+            ? """<p>Status: <b>no cookie stored</b> <span class="muted">(only exports are imported)</span></p>"""
             : failedFetch
-                ? $"""<p class="status bad"><span class="dot"></span>Cookie stored, but the last fetch failed <small>{HtmlEncode(m.LastFetch!.Message)}</small></p>"""
-                : $"""<p class="status ok"><span class="dot"></span>Cookie stored{(m.Username is null ? "" : $" for @{HtmlEncode(m.Username)}")} <small>encrypted at rest</small></p>""";
+                ? $"""<p>Status: <b class="fail">the last fetch failed</b>. {HtmlEncode(m.LastFetch!.Message)}</p>"""
+                : $"""<p>Status: <b class="ok">cookie stored</b>{(m.Username is null ? "" : $" for @{HtmlEncode(m.Username)}")}</p>""";
 
         var values = new Dictionary<string, string>
         {
@@ -49,19 +49,19 @@ public static class SettingsPage
             ["session_status"] = sessionStatus,
             ["username"] = HtmlEncode(m.Username ?? ""),
             ["remove_form"] = !m.HasSession ? "" : $"""
-                <form method="post" action="settings/session/remove" style="margin-top:10px">{token}
+                <form method="post" action="settings/session/remove">{token}
                   <button type="submit" class="danger">Remove cookie</button>
                 </form>
                 """,
-            ["schedule"] = $"Every day at {m.DailyAt:HH:mm} ({HtmlEncode(TimeZoneInfo.Local.Id)}) plus up to {m.RandomDelayMinutes} minutes",
+            ["schedule"] = $"Runs every day at {m.DailyAt:HH:mm} ({HtmlEncode(TimeZoneInfo.Local.Id)}), plus up to {m.RandomDelayMinutes} minutes.",
             ["next_run"] = m.NextRunAt is { } next ? Local(next) : "—",
             ["last_fetch"] = m.LastFetch is null ? "never" : $"{Local(m.LastFetch.At)} · {(m.LastFetch.Ok ? "ok" : "failed")} · {HtmlEncode(m.LastFetch.Message)}",
             ["fetch_disabled"] = m.HasSession && m.Running is null ? "" : "disabled",
-            ["running"] = m.Running is not null ? $"{HtmlEncode(m.Running)} in progress… this page refreshes itself."
-                : m.HasSession ? "Fetches right away, even if today's run already happened." : "Store a cookie first.",
+            ["running"] = m.Running is not null ? $"{HtmlEncode(m.Running)} in progress. This page refreshes itself."
+                : m.HasSession ? "" : "Store a cookie first.",
             ["exports_hint"] = string.IsNullOrEmpty(m.ExportsPath)
                 ? "No watched folder is configured."
-                : $"Zips named <code>instagram-*.zip</code> in the watched folder (<code>{HtmlEncode(m.ExportsPath)}</code> in the container, EXPORTS_DIR on your PC) are imported on every daily run.",
+                : "Or put it in your EXPORTS_DIR folder: every <code>instagram-*.zip</code> there is imported on the next daily run.",
             ["runs"] = Runs(m.RecentRuns),
         };
 
@@ -73,9 +73,9 @@ public static class SettingsPage
 
     private static string Runs(IReadOnlyList<RunRow> runs)
     {
-        if (runs.Count == 0) return """<p class="lede">Nothing has run yet.</p>""";
+        if (runs.Count == 0) return """<p class="muted">Nothing has run yet.</p>""";
         var rows = string.Concat(runs.Select(r => $"""
-            <tr><td class="when">{Local(r.At)}</td><td class="kind">{HtmlEncode(r.Kind)}</td>
+            <tr><td>{Local(r.At)}</td><td>{HtmlEncode(r.Kind)}</td>
             <td class="{(r.Ok ? "ok" : "fail")}">{(r.Ok ? "ok" : "failed")}</td><td>{HtmlEncode(r.Message)}</td></tr>
             """));
         return $"""<table><thead><tr><th>When</th><th>What</th><th>Result</th><th>Details</th></tr></thead><tbody>{rows}</tbody></table>""";

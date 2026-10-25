@@ -2,7 +2,7 @@
 
 # following
 
-A daily report of your Instagram followers and following. It shows who doesn't follow you back, who you don't follow back, who unfollowed you, and every change between days. It runs on your PC in Docker (the app plus Postgres), and the report is served at <http://localhost:8080>.
+A daily report of your Instagram followers and following. It shows who doesn't follow you back, who you don't follow back, who unfollowed you, and every change between days. It runs on your PC in Docker (the app plus Postgres), and the report is served at <http://localhost:47321>.
 
 ## Who unfollowed you
 
@@ -23,7 +23,7 @@ Requires Docker Desktop.
 ```powershell
 copy .env.example .env        # then edit: POSTGRES_PASSWORD, TZ, EXPORTS_DIR
 docker compose up -d --build
-start http://localhost:8080/settings
+start http://localhost:47321/settings
 ```
 
 On the Settings page, paste your Instagram `sessionid` cookie; the page explains where to find it. The app checks the cookie with one request before saving it. From then on it fetches once a day.
@@ -45,7 +45,7 @@ A fetch is refused, and not saved, if the list comes back much shorter than the 
 | `POSTGRES_PASSWORD` | (required) | Password for the bundled Postgres. Use letters and digits only. |
 | `TZ` | `UTC` | IANA time zone for the schedule, e.g. `Europe/Berlin` |
 | `DAILY_AT` | `09:00` | When the daily run starts |
-| `PORT` | `8080` | Port on `127.0.0.1` |
+| `PORT` | `47321` | Port on `127.0.0.1` |
 | `EXPORTS_DIR` | `./imports` | Folder watched for export zips, e.g. `C:/Users/you/Downloads` |
 
 ## Security
