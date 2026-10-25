@@ -6,7 +6,7 @@ A daily report of your Instagram followers and following. It shows who doesn't f
 
 ## Who unfollowed you
 
-Each run compares the new snapshot with the previous one, so something that happened yesterday is in today's report. The **Unfollowed you** tab opens by default whenever there's fresh news. It labels each case with what the data can actually show:
+Each run compares the new snapshot with the previous one, so something that happened yesterday is in today's report. The report opens on **History** (every change, newest first). The **Unfollowed you** tab lists just the losses and labels each case with what the data can actually show:
 
 | You see | It means |
 |---|---|

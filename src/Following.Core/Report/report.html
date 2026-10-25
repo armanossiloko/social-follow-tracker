@@ -191,10 +191,9 @@
     },
   ];
 
-  // Open on the unfollows when the latest snapshot brought some; a #hash in the URL wins.
+  // Open on History; a #hash in the URL (set when switching tabs) wins.
   const hash = location.hash.slice(1);
-  let tab = TABS.some((t) => t.id === hash) ? hash
-    : latest && losses.some((e) => e.at === latest.takenAt) ? "lost" : "notFollowingBack";
+  let tab = TABS.some((t) => t.id === hash) ? hash : "history";
 
   $("tabs").innerHTML = TABS.map((t) =>
     `<button role="tab" data-tab="${t.id}">${t.label}<span class="count">${nf.format(t.count)}</span></button>`).join("");
