@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Following — daily report</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23c2381b'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-family='Georgia,serif' font-size='38' font-weight='700' fill='%23f4efe4'%3EF%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --paper: #f4efe4;
+    --paper-deep: #ebe4d4;
+    --ink: #1b1915;
+    --ink-soft: #57524a;
+    --ink-faint: #8f887b;
+    --rule: #1b1915;
+    --hair: #cfc6b3;
+    --loss: #c2381b;
+    --gain: #2d6a4a;
+    --tint-loss: #c2381b14;
+    --tint-gain: #2d6a4a14;
+    --display: "Sitka Banner", "Sitka Display", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    --text: "Sitka Text", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    --label: Bahnschrift, "DIN Alternate", "Franklin Gothic Medium", "Arial Narrow", sans-serif;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.1 0 0 0 0 0.09 0 0 0 0 0.07 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #16140f;
+      --paper-deep: #1f1c16;
+      --ink: #ece5d6;
+      --ink-soft: #b5ad9d;
+      --ink-faint: #7b7466;
+      --rule: #ece5d6;
+      --hair: #3a352c;
+      --loss: #f0714f;
+      --gain: #6fc497;
+      --tint-loss: #f0714f1a;
+      --tint-gain: #6fc4971a;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--paper); }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background: var(--grain), var(--paper);
+    font: 17px/1.5 var(--text);
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: oldstyle-nums;
+  }
+  a { color: inherit; }
+  .sheet { max-width: 1160px; margin: 0 auto; padding: 28px 32px 64px; }
+
+  /* ---------- masthead ---------- */
+  .ears {
+    display: flex; justify-content: space-between; gap: 16px;
+    font: 500 12px/1 var(--label); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft);
+  }
+  .nameplate {
+    margin: 14px 0 0; padding: 6px 0 10px;
+    border-top: 4px solid var(--rule); border-bottom: 1px solid var(--rule);
+    text-align: center;
+    font: 700 clamp(54px, 9.5vw, 118px)/.92 var(--display);
+    letter-spacing: -.02em;
+  }
+  .nameplate em { font-style: italic; font-weight: 400; }
+  .dateline {
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 24px;
+    padding: 8px 0; border-bottom: 4px double var(--rule);
+    font: 500 13px/1.3 var(--label); letter-spacing: .08em; text-transform: uppercase;
+  }
+  .dateline b { font-weight: 700; }
+
+  /* ---------- lead ---------- */
+  .lead { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 0 40px; padding: 30px 0 26px; border-bottom: 1px solid var(--rule); }
+  .kicker { font: 600 12px/1 var(--label); letter-spacing: .18em; text-transform: uppercase; color: var(--loss); margin-bottom: 12px; }
+  .headline { margin: 0; font: 700 clamp(34px, 4.6vw, 58px)/1.02 var(--display); letter-spacing: -.015em; text-wrap: balance; }
+  .deck { margin: 14px 0 0; font: italic 400 20px/1.4 var(--text); color: var(--ink-soft); max-width: 36em; text-wrap: pretty; }
+  .brief { border-left: 1px solid var(--rule); padding-left: 28px; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; }
+  .brief h3 { margin: 0 0 4px; font: 600 12px/1 var(--label); letter-spacing: .16em; text-transform: uppercase; }
+  .brief-row { display: flex; align-items: baseline; gap: 10px; font-size: 16px; }
+  .brief-row .n { font: 700 30px/1 var(--display); min-width: 1.6em; text-align: right; font-variant-numeric: lining-nums tabular-nums; }
+  .brief-row.gain .n { color: var(--gain); }
+  .brief-row.loss .n { color: var(--loss); }
+  .brief-row.zero { color: var(--ink-faint); }
+  .brief-row.zero .n { color: var(--ink-faint); }
+
+  /* ---------- notices ---------- */
+  .notice {
+    margin: 22px 0 0; padding: 14px 18px 14px 20px;
+    border: 1px solid var(--rule); border-left: 7px solid var(--loss);
+    background: var(--tint-loss);
+    display: grid; grid-template-columns: auto 1fr; gap: 2px 18px; align-items: baseline;
+  }
+  .notice.info { border-left-color: var(--ink); background: transparent; }
+  .notice.warn { border-left-color: #b8860b; background: #b8860b14; }
+  .notice .tag { grid-row: span 2; font: 700 11px/1 var(--label); letter-spacing: .18em; text-transform: uppercase; padding: 5px 7px; border: 1.5px solid currentColor; color: var(--loss); }
+  .notice.info .tag { color: var(--ink); }
+  .notice.warn .tag { color: #b8860b; }
+  .notice strong { font: 700 19px/1.25 var(--display); }
+  .notice p { margin: 0; color: var(--ink-soft); font-size: 15.5px; }
+  .notice code, .foot code { font: 13.5px var(--mono); background: var(--paper-deep); padding: 1px 5px; }
+
+  /* ---------- tally ---------- */
+  .tally { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-bottom: 1px solid var(--rule); }
+  .tally > div { padding: 18px 18px 16px; border-left: 1px solid var(--hair); }
+  .tally > div:first-child { border-left: 0; padding-left: 0; }
+  .tally .label { font: 600 11.5px/1.2 var(--label); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); }
+  .tally .value { font: 700 46px/1.05 var(--display); font-variant-numeric: lining-nums tabular-nums; margin-top: 6px; }
+  .tally .delta { font: 500 13px/1 var(--label); letter-spacing: .04em; margin-top: 4px; color: var(--ink-faint); min-height: 13px; }
+  .tally .delta .up { color: var(--gain); }
+  .tally .delta .down { color: var(--loss); }
+
+  /* ---------- sections ---------- */
+  .sections { display: flex; flex-wrap: wrap; gap: 0 30px; margin-top: 30px; border-bottom: 1px solid var(--rule); }
+  .sections button {
+    appearance: none; border: 0; background: none; cursor: pointer; color: var(--ink-soft);
+    padding: 0 0 10px; margin-bottom: -1px; border-bottom: 4px solid transparent;
+    font: 600 14px/1.2 var(--label); letter-spacing: .12em; text-transform: uppercase;
+    transition: color .15s, border-color .15s;
+  }
+  .sections button:hover { color: var(--ink); }
+  .sections button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+  .sections button .c { font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: 0; margin-left: 4px; font-variant-numeric: lining-nums; }
+  .sections button:focus-visible { outline: 2px solid var(--loss); outline-offset: 4px; }
+
+  .tools { display: flex; flex-wrap: wrap; align-items: end; gap: 14px 28px; padding: 18px 0 8px; }
+  .section-desc { flex: 1 1 320px; margin: 0; font: italic 17px/1.45 var(--text); color: var(--ink-soft); }
+  .search { flex: 0 1 300px; display: flex; align-items: center; gap: 8px; border-bottom: 1.5px solid var(--ink); padding: 4px 0; }
+  .search svg { flex: none; }
+  .search input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); font: 16px var(--mono); outline: none; }
+  .search input::placeholder { color: var(--ink-faint); }
+  .search kbd { font: 11px var(--label); border: 1px solid var(--hair); padding: 1px 5px; color: var(--ink-faint); }
+  select {
+    border: 0; border-bottom: 1.5px solid var(--ink); background: none; color: var(--ink); padding: 4px 18px 5px 0;
+    font: 600 12.5px var(--label); letter-spacing: .1em; text-transform: uppercase; cursor: pointer;
+  }
+  select option { background: var(--paper); color: var(--ink); text-transform: none; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips[hidden] { display: none; }
+  .chip {
+    appearance: none; cursor: pointer; padding: 5px 10px; border: 1px solid var(--hair); background: none; color: var(--ink-soft);
+    font: 500 12.5px/1 var(--label); letter-spacing: .06em; text-transform: uppercase;
+  }
+  .chip[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); background: var(--paper-deep); }
+
+  /* ---------- ledger ---------- */
+  .ledger { columns: 2 380px; column-gap: 44px; column-rule: 1px solid var(--hair); margin: 10px 0 0; padding: 0; list-style: none; }
+  .entry { break-inside: avoid; display: flex; align-items: baseline; gap: 8px; padding: 9px 0 8px; border-bottom: 1px solid var(--hair); }
+  .entry .who { min-width: 0; display: flex; flex-direction: column; }
+  .entry .user { font: 15.5px/1.3 var(--mono); text-decoration: none; overflow-wrap: anywhere; }
+  .entry .user:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .entry .user::before { content: "@"; color: var(--ink-faint); }
+  .entry .name { font: italic 15px/1.3 var(--text); color: var(--ink-soft); }
+  .entry .leader { flex: 1; min-width: 16px; border-bottom: 1.5px dotted var(--ink-faint); transform: translateY(-4px); }
+  .entry .when { flex: none; font: 500 12.5px/1 var(--label); letter-spacing: .05em; color: var(--ink-soft); text-align: right; }
+  .entry .when small { display: block; color: var(--ink-faint); font-size: 11px; margin-top: 3px; letter-spacing: .08em; text-transform: uppercase; }
+  .entry.is-new .user::after { content: "new"; margin-left: 8px; padding: 1px 5px; font: 700 10px/1 var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--paper); background: var(--gain); vertical-align: 2px; }
+
+  /* ---------- timeline ---------- */
+  .day { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 0 28px; padding: 16px 0; border-bottom: 1px solid var(--hair); }
+  .day h4 { margin: 0; font: 700 21px/1.1 var(--display); }
+  .day h4 small { display: block; margin-top: 5px; font: 500 11.5px/1.2 var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); }
+  .day ul { list-style: none; margin: 0; padding: 0; columns: 2 300px; column-gap: 32px; }
+  .ev { break-inside: avoid; display: flex; align-items: baseline; gap: 10px; padding: 3px 0; font-size: 15.5px; }
+  .ev .glyph { flex: none; width: 1.4em; text-align: center; font: 700 16px/1 var(--display); }
+  .ev .user { font: 15px var(--mono); text-decoration: none; }
+  .ev .user:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .ev .verb { color: var(--ink-soft); font-style: italic; }
+  .ev.t-gain .glyph { color: var(--gain); }
+  .ev.t-loss .glyph { color: var(--loss); }
+  .ev.t-neutral .glyph { color: var(--ink-faint); }
+  .ev.k-unfollowedYou, .ev.k-vanished { background: linear-gradient(90deg, var(--tint-loss), transparent 70%); }
+  .ev .user::before { content: "@"; }
+
+  /* ---------- unfollows ("obituaries") ---------- */
+  .obits { list-style: none; margin: 10px 0 0; padding: 0; }
+  .obit { display: grid; grid-template-columns: 2.4em minmax(0, 1fr) auto; gap: 4px 20px; align-items: start; padding: 16px 0 15px; border-bottom: 1px solid var(--hair); }
+  .obit .glyph { font: 700 30px/1 var(--display); color: var(--loss); text-align: center; }
+  .obit.k-leftYourFollowing .glyph { color: var(--ink-faint); }
+  .obit .who { min-width: 0; }
+  .obit .user { font: 17px/1.3 var(--mono); text-decoration: none; overflow-wrap: anywhere; }
+  .obit .user:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .obit .user::before { content: "@"; color: var(--ink-faint); }
+  .obit .name { margin-left: 10px; font: italic 16px/1.3 var(--text); color: var(--ink-soft); }
+  .obit .verdict { margin-top: 4px; font-size: 15.5px; line-height: 1.4; color: var(--ink-soft); }
+  .obit .verdict b { font: 700 16.5px/1 var(--display); color: var(--ink); }
+  .obit.k-unfollowedYou .verdict b, .obit.k-vanished .verdict b { color: var(--loss); }
+  .obit.is-new .user::after { content: "new"; margin-left: 8px; padding: 1px 5px; font: 700 10px/1 var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--paper); background: var(--loss); vertical-align: 2px; }
+  .obit .meta { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; text-align: right; padding-top: 3px; }
+  .obit .when { font: 600 13px/1.2 var(--label); letter-spacing: .06em; text-transform: uppercase; }
+  .obit .meta small { font: 500 12px/1.2 var(--label); letter-spacing: .04em; color: var(--ink-faint); }
+  .pill { display: inline-block; padding: 3px 7px; border: 1.5px solid currentColor; font: 700 10.5px/1 var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+  .pill.tone-loss { color: var(--loss); }
+  .pill.tone-gain { color: var(--gain); }
+
+  .empty { padding: 48px 0 40px; text-align: center; }
+  .empty .orn { font: 400 30px/1 var(--display); color: var(--ink-faint); letter-spacing: .5em; }
+  .empty p { margin: 14px auto 0; max-width: 30em; font: italic 19px/1.45 var(--text); color: var(--ink-soft); }
+
+  .foot { margin-top: 48px; padding-top: 12px; border-top: 4px double var(--rule); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; font: 500 12px/1.6 var(--label); letter-spacing: .06em; color: var(--ink-faint); }
+  .foot code { letter-spacing: 0; }
+
+  /* ---------- entrance ---------- */
+  @media (prefers-reduced-motion: no-preference) {
+    .rise { animation: rise .7s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i, 0) * 90ms); }
+    .entry, .day { animation: fade .45s ease-out both; animation-delay: calc(min(var(--n, 0), 24) * 18ms); }
+    @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+    @keyframes fade { from { opacity: 0; } }
+  }
+
+  @media (max-width: 820px) {
+    .sheet { padding: 18px 18px 48px; }
+    .lead { grid-template-columns: 1fr; gap: 22px; }
+    .brief { border-left: 0; padding-left: 0; border-top: 1px solid var(--hair); padding-top: 16px; }
+    .tally { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tally > div { border-left: 0; padding-left: 0; border-top: 1px solid var(--hair); }
+    .day { grid-template-columns: 1fr; gap: 10px; }
+    .obit { grid-template-columns: 2em minmax(0, 1fr); }
+    .obit .meta { grid-column: 2; align-items: flex-start; text-align: left; }
+    .ears span:nth-child(2) { display: none; }
+  }
+</style>
+</head>
+<body>
+<main class="sheet">
+  <header>
+    <div class="ears rise" style="--i:0"><span id="ear-left"></span><span>Followers &amp; following, reconciled daily</span><span id="ear-right"></span></div>
+    <h1 class="nameplate rise" style="--i:1">The <em>Following</em></h1>
+    <div class="dateline rise" style="--i:2"><span id="dateline-date"></span><span id="dateline-src"></span></div>
+  </header>
+
+  <section class="lead rise" style="--i:3">
+    <div>
+      <div class="kicker" id="kicker">Today's report</div>
+      <h2 class="headline" id="headline"></h2>
+      <p class="deck" id="deck"></p>
+    </div>
+    <aside class="brief" id="brief"></aside>
+  </section>
+
+  <div id="notices"></div>
+
+  <section class="tally rise" style="--i:4" id="tally"></section>
+
+  <nav class="sections rise" style="--i:5" role="tablist" id="tabs"></nav>
+  <div class="tools rise" style="--i:6">
+    <p class="section-desc" id="section-desc"></p>
+    <div class="chips" id="chips" hidden></div>
+    <select id="sort" aria-label="Sort"></select>
+    <label class="search">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.8" cy="6.8" r="5.3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.8 10.8 15 15" stroke="currentColor" stroke-width="1.6" stroke-linecap="square"/></svg>
+      <input id="q" type="search" placeholder="Search names" autocomplete="off" spellcheck="false" aria-label="Search">
+      <kbd>/</kbd>
+    </label>
+  </div>
+  <section id="panel" role="tabpanel"></section>
+
+  <footer class="foot">
+    <span id="foot-left"></span>
+    <span id="foot-right"></span>
+  </footer>
+</main>
+
+<script id="report-data" type="application/json">__REPORT_DATA__</script>
+<script>
+(() => {
+  const data = JSON.parse(document.getElementById("report-data").textContent);
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const profile = (u) => `https://www.instagram.com/${encodeURIComponent(u)}/`;
+  const nf = new Intl.NumberFormat();
+  const day = (iso) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  const longDay = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const time = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const plural = (n, one, many) => `${nf.format(n)} ${n === 1 ? one : many}`;
+  const ago = (iso) => {
+    const days = Math.floor((Date.now() - new Date(iso)) / 864e5);
+    if (days <= 0) return "today";
+    if (days === 1) return "yesterday";
+    if (days < 31) return `${days} days ago`;
+    if (days < 365) return `${Math.round(days / 30.4)} mo ago`;
+    const y = days / 365.25;
+    return `${y < 1.95 ? "1" : Math.floor(y)} yr ago`;
+  };
+
+  const latest = data.latest;
+  const lists = data.lists;
+  const people = data.people;
+  const lc = data.lastChanges;
+
+  // ---------- masthead ----------
+  $("ear-left").textContent = data.account ? `@${data.account}` : "Your account";
+  $("ear-right").textContent = `${plural(data.snapshotCount, "snapshot", "snapshots")} on file`;
+  $("dateline-date").innerHTML = `<b>${esc(longDay(data.generatedAt))}</b>`;
+  $("dateline-src").textContent = latest
+    ? `Data as of ${day(latest.takenAt)}, ${time(latest.takenAt)} · ${latest.source === "fetch" ? "auto-fetched" : "from export " + (latest.sourceRef ?? "")}`
+    : "Awaiting first snapshot";
+
+  // ---------- lead ----------
+  const lost = lc.unfollowedYou + lc.vanished; // stopped following you, including blocks/deactivations
+  const dropped = lc.leftYourFollowing; // you unfollowed them, or they removed you as a follower
+  const anyChange = Object.values(lc).some((n) => n > 0);
+  const listNames = (arr) => arr.slice(0, 4).join(", ") + (arr.length > 4 ? ` and ${arr.length - 4} more` : "");
+  let headline, deck, kicker = "Today's report";
+  if (!latest) {
+    kicker = "First edition";
+    headline = "Nothing to report yet.";
+    deck = "Once the first snapshot lands, this page shows who doesn't follow you back, who you don't follow back, and every change from one day to the next.";
+  } else if (!data.previousAt) {
+    kicker = "First edition";
+    headline = `${plural(lists.notFollowingBack.length, "account doesn't", "accounts don't")} follow you back.`;
+    deck = `${plural(lists.fans.length, "person follows", "people follow")} you without a follow back. Unfollows will show up here from the next snapshot on.`;
+  } else if (!anyChange) {
+    kicker = "All quiet";
+    headline = "No change since the last snapshot.";
+    deck = `Nobody came or went since ${day(data.previousAt)}. ${plural(lists.notFollowingBack.length, "account still doesn't", "accounts still don't")} follow you back.`;
+  } else {
+    const parts = [];
+    if (lost) parts.push(`${nf.format(lost)} ${lost === 1 ? "unfollow" : "unfollows"}`);
+    if (lc.followedYou) parts.push(plural(lc.followedYou, "new follower", "new followers"));
+    if (dropped) parts.push(`${nf.format(dropped)} gone from your following`);
+    if (!parts.length) parts.push(lc.youFollowed ? `You followed ${plural(lc.youFollowed, "account", "accounts")}` : plural(lc.renamed, "account renamed", "accounts renamed"));
+    headline = parts.join(", ") + ".";
+    kicker = lost || dropped ? (lc.followedYou ? "Since the last snapshot" : "Losses reported") : lc.followedYou ? "Gains reported" : "Since the last snapshot";
+    const latestLosses = data.events.filter((e) => e.at === latest.takenAt && (e.kind === "unfollowedYou" || e.kind === "vanished")).map((e) => "@" + e.username);
+    deck = (latestLosses.length ? `Unfollowed you: ${listNames(latestLosses)}. ` : "") +
+      `Compared with the snapshot from ${day(data.previousAt)}, ${time(data.previousAt)}.`;
+  }
+  $("kicker").textContent = kicker;
+  $("headline").textContent = headline;
+  $("deck").textContent = deck;
+
+  const briefRow = (n, label, tone, hideZero = false) =>
+    hideZero && !n ? "" : `<div class="brief-row ${n ? tone : "zero"}"><span class="n">${nf.format(n)}</span><span>${label}</span></div>`;
+  $("brief").innerHTML = latest && data.previousAt
+    ? `<h3>Since ${esc(day(data.previousAt))}</h3>` +
+      briefRow(lc.followedYou, "followed you", "gain") +
+      briefRow(lc.unfollowedYou, "unfollowed you", "loss") +
+      briefRow(lc.vanished, "blocked you or deactivated", "loss", true) +
+      briefRow(lc.leftYourFollowing, "gone from your following", "loss") +
+      briefRow(lc.youFollowed, "you followed", "gain") +
+      briefRow(lc.renamed, "renamed their account", "", true)
+    : `<h3>How this works</h3><p style="margin:0;font-size:15.5px;color:var(--ink-soft)">Each daily run saves a snapshot and compares it with the one before it.</p>`;
+
+  // ---------- notices ----------
+  $("notices").innerHTML = data.warnings.map((w) => `
+    <div class="notice ${esc(w.level)} rise" style="--i:4">
+      <span class="tag">${w.level === "error" ? "Stop press" : w.level === "warn" ? "Notice" : "Note"}</span>
+      <strong>${esc(w.title)}</strong>
+      <p>${esc(w.detail).replace(/`([^`]+)`/g, "<code>$1</code>")}</p>
+    </div>`).join("");
+
+  // ---------- tally ----------
+  const trend = data.trend;
+  const prev = trend.length > 1 ? trend[trend.length - 2] : null;
+  const delta = (cur, before) => {
+    if (before == null) return "";
+    const d = cur - before;
+    return d === 0 ? "no change" : `<span class="${d > 0 ? "up" : "down"}">${d > 0 ? "+" : "−"}${nf.format(Math.abs(d))}</span> since last`;
+  };
+  const tile = (label, value, d) => `<div><div class="label">${label}</div><div class="value">${latest ? nf.format(value) : "—"}</div><div class="delta">${d}</div></div>`;
+  $("tally").innerHTML =
+    tile("Followers", latest?.followers, latest && prev ? delta(latest.followers, prev.followers) : "") +
+    tile("Following", latest?.following, latest && prev ? delta(latest.following, prev.following) : "") +
+    tile("Mutual", lists.mutual.length, "") +
+    tile("Don't follow you back", lists.notFollowingBack.length, "") +
+    tile("You don't follow back", lists.fans.length, "");
+
+  // ---------- sections ----------
+  const sinceText = (s, verb) => {
+    if (!s) return { main: "", sub: "" };
+    if (s.exact) return { main: day(s.at), sub: `${verb} · ${ago(s.at)}` };
+    if (s.atOrBefore) return { main: `before ${day(s.at)}`, sub: verb };
+    return { main: `≈ ${day(s.at)}`, sub: `${verb} · first seen` };
+  };
+  const isNewSince = (s) => s && data.previousAt && !s.atOrBefore && new Date(s.at) > new Date(data.previousAt);
+  const shortDay = (iso) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+
+  const EVENTS = {
+    unfollowedYou: { glyph: "−", tone: "loss", chip: "Unfollowed you", verb: "unfollowed you" },
+    vanished: { glyph: "×", tone: "loss", chip: "Blocked or deactivated", verb: "vanished from both lists (blocked you, or deactivated)" },
+    leftYourFollowing: { glyph: "←", tone: "loss", chip: "Gone from your following", verb: "left your following (you unfollowed, or they removed you)" },
+    followedYou: { glyph: "+", tone: "gain", chip: "Followed you", verb: "followed you" },
+    youFollowed: { glyph: "→", tone: "gain", chip: "You followed", verb: "you followed" },
+    renamed: { glyph: "↻", tone: "neutral", chip: "Renamed", verb: "renamed" },
+  };
+  const VERDICTS = {
+    unfollowedYou: ["Unfollowed you.", "They stopped following you."],
+    vanished: ["Gone from both lists.", "They blocked you, or deactivated or deleted their account."],
+    leftYourFollowing: ["Gone from your following.", "You unfollowed them, or, if you didn't, they removed you as a follower."],
+  };
+  const LOSS_KINDS = ["unfollowedYou", "vanished", "leftYourFollowing"];
+  const losses = data.events.filter((e) => LOSS_KINDS.includes(e.kind));
+
+  const SECTIONS = [
+    {
+      id: "lost", type: "losses", label: "Unfollowed you", list: losses, kinds: LOSS_KINDS,
+      desc: "Who stopped following you, or dropped off your following list. Found by comparing each snapshot with the one before it.",
+      empty: data.snapshotCount < 2
+        ? "Unfollows show up here from the second snapshot on, so after the next daily run."
+        : `Nobody has unfollowed you since ${data.firstSnapshotAt ? day(data.firstSnapshotAt) : "tracking began"}.`,
+    },
+    {
+      id: "notFollowingBack", type: "ledger", label: "Don't follow you back", list: lists.notFollowingBack,
+      desc: "You follow them; they don't follow you.",
+      since: (p) => sinceText(p.youFollowSince, "you followed"), sinceKey: (p) => p.youFollowSince,
+      empty: "Everyone you follow follows you back.",
+    },
+    {
+      id: "fans", type: "ledger", label: "You don't follow back", list: lists.fans,
+      desc: "They follow you; you don't follow them.",
+      since: (p) => sinceText(p.followsYouSince, "followed you"), sinceKey: (p) => p.followsYouSince,
+      empty: "You follow back everyone who follows you.",
+    },
+    {
+      id: "mutual", type: "ledger", label: "Mutual", list: lists.mutual,
+      desc: "You follow each other.",
+      since: (p) => sinceText(p.followsYouSince, "follows you"), sinceKey: (p) => p.followsYouSince,
+      empty: "No mutual follows yet.",
+    },
+    {
+      id: "changes", type: "events", label: "All changes", list: data.events, kinds: Object.keys(EVENTS),
+      desc: "Every change detected between snapshots, newest first.",
+      empty: "Changes appear once there are at least two snapshots.",
+    },
+  ];
+
+  // Open on the unfollows when the latest snapshot brought some; a #hash in the URL wins.
+  const freshLoss = latest && losses.some((e) => e.at === latest.takenAt);
+  const state = {
+    tab: SECTIONS.some((s) => s.id === location.hash.slice(1)) ? location.hash.slice(1) : freshLoss ? "lost" : "notFollowingBack",
+    q: "", sort: "az",
+    kinds: Object.fromEntries(SECTIONS.filter((s) => s.kinds).map((s) => [s.id, new Set(s.kinds)])),
+  };
+
+  $("tabs").innerHTML = SECTIONS.map((s) =>
+    `<button role="tab" data-tab="${s.id}" aria-selected="false">${esc(s.label)}<span class="c">${nf.format(s.list.length)}</span></button>`).join("");
+  $("tabs").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-tab]");
+    if (!b) return;
+    state.tab = b.dataset.tab;
+    history.replaceState(null, "", "#" + state.tab);
+    render();
+  });
+
+  $("chips").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-kind]");
+    if (!b) return;
+    const section = SECTIONS.find((s) => s.id === state.tab);
+    const kinds = state.kinds[section.id];
+    const k = b.dataset.kind;
+    kinds.has(k) ? kinds.delete(k) : kinds.add(k);
+    if (!kinds.size) section.kinds.forEach((x) => kinds.add(x));
+    render();
+  });
+
+  $("q").addEventListener("input", (e) => { state.q = e.target.value.trim().toLowerCase(); render(); });
+  $("sort").addEventListener("change", (e) => { state.sort = e.target.value; render(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "/" && document.activeElement !== $("q")) { e.preventDefault(); $("q").focus(); }
+    if (e.key === "Escape" && document.activeElement === $("q")) { $("q").value = ""; state.q = ""; render(); }
+  });
+
+  const matches = (u, extra) => {
+    if (!state.q) return true;
+    const p = people[u];
+    return u.includes(state.q) || (p?.name ?? "").toLowerCase().includes(state.q) || (extra ?? "").includes(state.q);
+  };
+
+  const emptyBlock = (text) => `<div class="empty"><div class="orn">✦ ✦ ✦</div><p>${esc(text)}</p></div>`;
+
+  function setSort(type) {
+    const sortSel = $("sort");
+    if (sortSel.dataset.for === type) return;
+    sortSel.dataset.for = type;
+    sortSel.innerHTML = type === "ledger"
+      ? `<option value="az">A → Z</option><option value="newest">Newest first</option><option value="oldest">Oldest first</option>`
+      : `<option value="newest">Newest first</option><option value="oldest">Oldest first</option>`;
+    sortSel.value = state.sort = type === "ledger" ? "az" : "newest";
+  }
+
+  const userLink = (u) => `<a class="user" href="${profile(u)}" target="_blank" rel="noopener noreferrer">${esc(u)}</a>`;
+
+  function renderLedger(section) {
+    setSort("ledger");
+    let rows = section.list.filter((u) => matches(u));
+    if (state.sort !== "az") {
+      const t = (u) => { const s = section.sinceKey(people[u] ?? {}); return s ? new Date(s.at).getTime() : 0; };
+      rows = [...rows].sort((a, b) => state.sort === "newest" ? t(b) - t(a) : t(a) - t(b));
+    }
+    if (!rows.length) return emptyBlock(state.q ? `No one matching “${state.q}”.` : section.empty);
+    return `<ul class="ledger">${rows.map((u, n) => {
+      const p = people[u] ?? {};
+      const s = section.since(p);
+      const fresh = isNewSince(section.sinceKey(p));
+      return `<li class="entry${fresh ? " is-new" : ""}" style="--n:${n}">
+        <span class="who">${userLink(u)}${p.name ? `<span class="name">${esc(p.name)}</span>` : ""}</span>
+        <span class="leader"></span>
+        <span class="when">${esc(s.main)}${s.sub ? `<small>${esc(s.sub)}</small>` : ""}</span>
+      </li>`;
+    }).join("")}</ul>`;
+  }
+
+  // When the change happened: between the snapshot before and the one that first showed it.
+  const windowText = (e) => {
+    if (!e.after) return `by ${day(e.at)}`;
+    return new Date(e.after).toDateString() === new Date(e.at).toDateString()
+      ? `on ${day(e.at)}`
+      : `between ${shortDay(e.after)} and ${day(e.at)}`;
+  };
+
+  const tenure = (e) => {
+    const s = e.followedSince;
+    if (!s) return "";
+    const who = e.kind === "leftYourFollowing" ? "you'd followed them" : "had followed you";
+    const when = s.exact ? `since ${day(s.at)}` : s.atOrBefore ? `since before ${day(s.at)}` : `since ≈ ${day(s.at)}`;
+    return `<small>${who} ${when}</small>`;
+  };
+
+  // Where things stand now, which can differ from the moment of the change.
+  const statusPill = (e, p) => {
+    let text = null, tone = "neutral";
+    if (e.kind === "unfollowedYou") {
+      if (p.followsYou) [text, tone] = ["Followed you again", "gain"];
+      else if (p.youFollow) [text, tone] = ["You still follow them", "loss"];
+    } else if (e.kind === "vanished") {
+      if (p.followsYou || p.youFollow) [text, tone] = ["Back now", "gain"];
+    } else if (e.kind === "leftYourFollowing") {
+      if (p.youFollow) [text, tone] = ["You follow them again", "gain"];
+      else if (p.followsYou) text = "Still follows you";
+    }
+    return text ? `<span class="pill tone-${tone}">${text}</span>` : "";
+  };
+
+  function renderLosses(section) {
+    setSort("events");
+    let evs = section.list.filter((e) => state.kinds[section.id].has(e.kind) && matches(e.username));
+    if (state.sort === "oldest") evs = [...evs].reverse();
+    if (!evs.length) return emptyBlock(state.q ? `No one matching “${state.q}”.` : section.empty);
+    return `<ol class="obits">${evs.map((e, n) => {
+      const p = people[e.username] ?? {};
+      const [title, explain] = VERDICTS[e.kind];
+      const fresh = latest && e.at === latest.takenAt;
+      return `<li class="obit k-${e.kind}${fresh ? " is-new" : ""}" style="--n:${n}">
+        <span class="glyph" aria-hidden="true">${EVENTS[e.kind].glyph}</span>
+        <div class="who">
+          ${userLink(e.username)}${p.name ? `<span class="name">${esc(p.name)}</span>` : ""}
+          <div class="verdict"><b>${title}</b> ${explain}</div>
+        </div>
+        <div class="meta">
+          <span class="when">${esc(windowText(e))}</span>
+          ${tenure(e)}
+          ${statusPill(e, p)}
+        </div>
+      </li>`;
+    }).join("")}</ol>`;
+  }
+
+  function renderChanges(section) {
+    setSort("events");
+    const evs = section.list.filter((e) => state.kinds[section.id].has(e.kind) && matches(e.username, e.previousUsername));
+    if (!evs.length) return emptyBlock(state.q ? `No changes matching “${state.q}”.` : section.empty);
+    const groups = new Map();
+    for (const e of evs) {
+      const key = new Date(e.at).toDateString();
+      if (!groups.has(key)) groups.set(key, { at: e.at, items: [] });
+      groups.get(key).items.push(e);
+    }
+    let days = [...groups.values()];
+    if (state.sort === "oldest") days = days.reverse();
+    return days.map((g, n) => `
+      <div class="day" style="--n:${n}">
+        <h4>${esc(shortDay(g.at))}<small>${esc(new Date(g.at).toLocaleDateString(undefined, { weekday: "long" }))} · ${esc(ago(g.at))}</small></h4>
+        <ul>${g.items.map((e) => {
+          const meta = EVENTS[e.kind];
+          const name = people[e.username]?.name;
+          const verb = e.kind === "renamed" ? `renamed from @${esc(e.previousUsername)}` : meta.verb;
+          return `<li class="ev t-${meta.tone} k-${e.kind}"><span class="glyph" aria-hidden="true">${meta.glyph}</span>
+            <span>${userLink(e.username)}
+            <span class="verb">${verb}</span>${name ? ` <span class="verb" style="font-style:normal">· ${esc(name)}</span>` : ""}</span></li>`;
+        }).join("")}</ul>
+      </div>`).join("");
+  }
+
+  function render() {
+    const section = SECTIONS.find((s) => s.id === state.tab);
+    document.querySelectorAll("#tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === state.tab)));
+    $("section-desc").textContent = section.desc;
+    $("chips").hidden = !section.kinds;
+    if (section.kinds) {
+      $("chips").innerHTML = section.kinds.map((k) =>
+        `<button class="chip" data-kind="${k}" aria-pressed="${state.kinds[section.id].has(k)}">${EVENTS[k].chip}</button>`).join("");
+    }
+    $("panel").innerHTML = section.type === "events" ? renderChanges(section)
+      : section.type === "losses" ? renderLosses(section)
+      : renderLedger(section);
+  }
+  render();
+
+  // ---------- footer ----------
+  $("foot-left").innerHTML = `Generated ${esc(day(data.generatedAt))}, ${esc(time(data.generatedAt))}` +
+    (data.firstSnapshotAt ? ` · tracking since ${esc(day(data.firstSnapshotAt))}` : "");
+  $("foot-right").innerHTML = `Data: <code>${esc(data.dataDir)}</code>`;
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Following.Background/Following.Background.csproj" />
+    <Project Path="src/Following.Core/Following.Core.csproj" />
+    <Project Path="src/Following/Following.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Following.Tests/Following.Tests.csproj" />
+  </Folder>
+</Solution>
