@@ -44,6 +44,15 @@ await using (var scope = app.Services.CreateAsyncScope())
 
 app.UseAntiforgery();
 
+// Log every call from the browser extension (including rejected ones) so a broken setup is diagnosable.
+app.Use(async (http, next) =>
+{
+    await next(http);
+    if (http.Request.Path.StartsWithSegments("/api"))
+        app.Logger.LogInformation("{Method} {Path} from origin {Origin} -> {Status}",
+            http.Request.Method, http.Request.Path, http.Request.Headers.Origin.ToString() is { Length: > 0 } o ? o : "(none)", http.Response.StatusCode);
+});
+
 // Every state-changing endpoint checks the form token. The built-in middleware only checks requests that carry
 // form data, which would let another site trigger a bodiless POST (Fetch now, Remove cookie) from your browser.
 var forms = app.MapGroup("/settings").AddEndpointFilter(async (context, next) =>
