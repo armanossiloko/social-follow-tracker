@@ -99,3 +99,7 @@ The projects are:
 - `src/Following.Core`: the Instagram client, export parser, diff logic, schedule math and report template (`Report/report.html`)
 - `src/Following.Web`: the ASP.NET Core app (Postgres via EF Core, daily scheduler, Settings page)
 - `tests/Following.Tests`
+
+## License
+
+[MIT](LICENSE)
