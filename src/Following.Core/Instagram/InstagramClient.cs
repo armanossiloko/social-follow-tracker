@@ -73,6 +73,27 @@ public sealed class InstagramClient
         return id;
     }
 
+    /// <summary>
+    /// Username of the account the session belongs to, or null if Instagram doesn't say.
+    /// Throws <see cref="SessionExpiredException"/> for a bad cookie, so it doubles as a session check.
+    /// </summary>
+    public async Task<string?> GetUsernameAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            using var doc = await GetAsync($"/api/v1/users/{UserId}/info/", ct);
+            return doc.RootElement.GetProperty("user").GetProperty("username").GetString();
+        }
+        catch (InstagramException e) when (e is not SessionExpiredException and not RateLimitedException)
+        {
+            return null;
+        }
+        catch (KeyNotFoundException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Follower/following totals shown on the profile, used to sanity-check a fetch.</summary>
     public async Task<(int? Followers, int? Following)> GetProfileCountsAsync(CancellationToken ct = default)
     {

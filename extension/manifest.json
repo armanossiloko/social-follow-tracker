@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Following: Instagram session sync",
+  "version": "1.0.0",
+  "description": "Sends your instagram.com session cookie to your local Following app, so you never have to paste it.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuxE1igwCvtRE/SQ3sUwx0N4D+A0UM59mqRJuzrI8zdfcnFghcYMRdSh2doe69NXQyIV8oFKx00L/NAoAdqSpMEsGvuOIjMSn8RZR49Zlz/dJ+6/+Wv+/AtzMEAkqZlfTez2wrbhogVG2vYBhjoA1OkjoMeJJxVeZhQB7d7RzmJ4ms5EeWQH12JyyOcVlX6sDh822nfCgdKc+6hXacnbT9a+GWKlGEhHCVe7W9dg9LKRKSNGodY03mU0ySsY+V5T2X3g/CYC6qTh1EnSG+34CtpJVLe+Jp8OxvK836A5bGEGhHf6yo1LYGzuO90MN4i/LUJA83g8xgZmFX6leCltNJQIDAQAB",
+  "permissions": ["cookies", "storage", "alarms"],
+  "host_permissions": ["https://*.instagram.com/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Following", "default_popup": "popup.html" }
+}

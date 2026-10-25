@@ -34,6 +34,7 @@ builder.Services.AddSingleton<SchedulerState>();
 builder.Services.AddScoped<SnapshotRepository>();
 builder.Services.AddScoped<SessionStore>();
 builder.Services.AddScoped<FollowJobs>();
+builder.Services.AddScoped<SessionUpdater>();
 builder.Services.AddHostedService<DailyScheduler>();
 
 var app = builder.Build();
@@ -77,8 +78,7 @@ app.MapGet("/settings", async (
         antiforgery.GetAndStoreTokens(http),
         error ?? msg,
         error is not null,
-        await session.GetUsernameAsync(ct),
-        await session.HasSessionAsync(ct),
+        await session.GetInfoAsync(ct),
         await repo.LastRunAsync(RunKind.Fetch, okOnly: false, ct),
         opts.Value.DailyAt,
         opts.Value.RandomDelayMinutes,
@@ -89,29 +89,26 @@ app.MapGet("/settings", async (
     return Results.Content(SettingsPage.Render(model), "text/html; charset=utf-8");
 });
 
-forms.MapPost("/session", async (
-    HttpContext http, [FromForm] string? username, [FromForm] string sessionId,
-    SessionStore session, InstagramClientFactory clients, CancellationToken ct) =>
+forms.MapPost("/session", async (HttpContext http, [FromForm] string sessionId, SessionUpdater updater, CancellationToken ct) =>
 {
-    InstagramClient client;
-    try
-    {
-        client = clients.Create(sessionId);
-    }
-    catch (ArgumentException e)
-    {
-        return Back(http, error: e.Message);
-    }
-    try
-    {
-        await client.CheckSessionAsync(ct);
-    }
-    catch (InstagramException e)
-    {
-        return Back(http, error: "Instagram didn't accept that cookie: " + e.Message);
-    }
-    await session.SaveAsync(username, sessionId, ct);
-    return Back(http, "Cookie checked and saved. Daily runs will use it; Fetch now takes a snapshot right away.");
+    var result = await updater.UpdateAsync(sessionId, SessionSource.Manual, sameAccountOnly: false, ct);
+    return result.Ok ? Back(http, result.Message) : Back(http, error: result.Message);
+});
+
+// The browser extension posts the sessionid cookie here: right after install, whenever it changes, and hourly.
+// Only that extension is accepted: browsers always send the real Origin, and a website can't claim to be an
+// extension. The app only contacts Instagram when the cookie actually changed.
+app.MapPost("/api/session", async (
+    HttpContext http, SessionCookie body, SessionUpdater updater, SessionStore session,
+    IOptions<FollowingOptions> opts, TimeProvider clock, CancellationToken ct) =>
+{
+    if (http.Request.Headers.Origin != $"chrome-extension://{opts.Value.ExtensionId}")
+        return Results.Json(new { error = "Only the Following browser extension may post here." }, statusCode: StatusCodes.Status403Forbidden);
+    await session.MarkExtensionSeenAsync(clock.GetUtcNow(), ct);
+    var result = await updater.UpdateAsync(body.SessionId, SessionSource.Extension, sameAccountOnly: true, ct);
+    return result.Ok
+        ? Results.Json(new { message = result.Message, changed = result.Changed })
+        : Results.Json(new { error = result.Message }, statusCode: result.WrongAccount ? StatusCodes.Status409Conflict : StatusCodes.Status400BadRequest);
 });
 
 forms.MapPost("/session/remove", async (HttpContext http, SessionStore session, CancellationToken ct) =>

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root { color-scheme: light dark; }
+  body { width: 300px; margin: 0; padding: 12px; font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { margin: 0 0 8px; font-size: 15px; }
+  .ok { color: #1a7f37; }
+  .fail { color: #cf222e; }
+  .muted { color: #656d76; font-size: 12px; }
+  label { display: block; margin-top: 10px; font-weight: 600; font-size: 12px; }
+  input { width: 100%; box-sizing: border-box; margin-top: 3px; padding: 4px 6px; font: inherit; }
+  .row { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  button { padding: 4px 10px; font: inherit; cursor: pointer; }
+</style>
+</head>
+<body>
+  <h1>Following</h1>
+  <div id="status" class="muted">Not sent yet.</div>
+  <div id="when" class="muted"></div>
+  <label>App address <input id="url" type="text" spellcheck="false"></label>
+  <div class="row">
+    <button id="send">Send now</button>
+    <a id="open" href="#" target="_blank">Open report</a>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

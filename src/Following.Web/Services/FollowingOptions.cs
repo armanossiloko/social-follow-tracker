@@ -16,4 +16,10 @@ public sealed class FollowingOptions
 
     /// <summary>Where the data-protection keys that encrypt the session cookie are kept. Must persist across restarts.</summary>
     public string KeysPath { get; set; } = "/keys";
+
+    /// <summary>
+    /// Id of the browser extension allowed to post the session cookie. It's fixed by the "key" in
+    /// extension/manifest.json, so it's the same wherever the extension is loaded from.
+    /// </summary>
+    public string ExtensionId { get; set; } = "cmijdjdeopoddpijkiccfoolhbeenjoh";
 }

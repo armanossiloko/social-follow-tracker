@@ -64,8 +64,8 @@ public sealed class FollowJobs(
         {
             var message = e switch
             {
-                CryptographicException => "The stored session cookie can't be decrypted (the keys volume was probably reset). Paste it again on the Settings page.",
-                SessionExpiredException => e.Message + " Paste a fresh cookie on the Settings page.",
+                CryptographicException => "The stored session cookie can't be decrypted (the keys volume was probably reset). The browser extension resends it within the hour.",
+                SessionExpiredException => e.Message + " Log in to instagram.com again in your browser; the extension passes the new session on.",
                 _ => e.Message,
             };
             await repo.LogRunAsync(RunKind.Fetch, false, message, clock.GetUtcNow(), ct);

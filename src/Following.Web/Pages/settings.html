@@ -67,22 +67,22 @@
   <section>
     <h2>Instagram session</h2>
     {{session_status}}
-    <form method="post" action="settings/session" autocomplete="off">
-      {{antiforgery}}
-      <label>Username <input type="text" name="username" value="{{username}}" spellcheck="false"></label>
-      <label>sessionid cookie <input type="password" name="sessionId" required></label>
-      <button type="submit">Check and save</button>
-    </form>
+    {{extension_status}}
     {{remove_form}}
     <details>
-      <summary>Where do I find the cookie?</summary>
+      <summary>Paste the cookie manually instead</summary>
       <ol>
         <li>Log in at <a href="https://www.instagram.com" target="_blank" rel="noopener noreferrer">instagram.com</a> in your browser.</li>
-        <li>Press F12, then go to Application (Chrome/Edge) or Storage (Firefox) → Cookies → <code>https://www.instagram.com</code>.</li>
-        <li>Copy the value of <code>sessionid</code> and paste it above.</li>
+        <li>Press F12, then go to Application → Cookies → <code>https://www.instagram.com</code>.</li>
+        <li>Copy the value of <code>sessionid</code> and paste it here.</li>
       </ol>
+      <form method="post" action="settings/session" autocomplete="off">
+        {{antiforgery}}
+        <label>sessionid cookie <input type="password" name="sessionId" required></label>
+        <button type="submit">Check and save</button>
+      </form>
     </details>
-    <p class="muted" style="margin-top:10px">This uses Instagram unofficially, which is against its Terms of Use. It fetches once a day, slowly. If Instagram logs the session out, paste a fresh cookie here.</p>
+    <p class="muted" style="margin-top:10px">This uses Instagram unofficially, which is against its Terms of Use. It fetches once a day, slowly.</p>
   </section>
 
   <section>

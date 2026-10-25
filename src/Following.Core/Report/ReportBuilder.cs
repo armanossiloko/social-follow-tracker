@@ -132,7 +132,7 @@ public static class ReportBuilder
             warnings.Add(new("info", "No data yet",
                 context.HasSession
                     ? "The first snapshot is taken on the next run; use Fetch now on the Settings page to take it right away."
-                    : "Paste your Instagram session cookie on the Settings page for daily fetches, or upload an export there."));
+                    : "Install the browser extension (see Settings) for daily fetches, or upload an export there."));
         }
         else if (context.Now - latest.TakenAt > TimeSpan.FromDays(3))
         {

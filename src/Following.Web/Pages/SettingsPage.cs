@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text;
 using Following.Web.Data;
+using Following.Web.Services;
 using Microsoft.AspNetCore.Antiforgery;
 using static System.Net.WebUtility;
 
@@ -10,8 +11,7 @@ public sealed record SettingsModel(
     AntiforgeryTokenSet Antiforgery,
     string? Notice,
     bool NoticeIsError,
-    string? Username,
-    bool HasSession,
+    SessionInfo Session,
     RunRow? LastFetch,
     TimeOnly DailyAt,
     int RandomDelayMinutes,
@@ -34,12 +34,20 @@ public static class SettingsPage
     public static string Render(SettingsModel m)
     {
         var token = $"""<input type="hidden" name="{HtmlEncode(m.Antiforgery.FormFieldName)}" value="{HtmlEncode(m.Antiforgery.RequestToken)}">""";
-        var failedFetch = m.HasSession && m.LastFetch is { Ok: false };
-        var sessionStatus = !m.HasSession
+        var session = m.Session;
+        var hasSession = session.HasSession;
+        var account = session.Username is null ? "" : $" for @{HtmlEncode(session.Username)}";
+        var updated = session.UpdatedAt is { } at
+            ? $""" <span class="muted">(from {(session.Source == SessionSource.Extension ? "the browser extension" : "manual paste")}, {Local(at)})</span>"""
+            : "";
+        var sessionStatus = !hasSession
             ? """<p>Status: <b>no cookie stored</b> <span class="muted">(only exports are imported)</span></p>"""
-            : failedFetch
-                ? $"""<p>Status: <b class="fail">the last fetch failed</b>. {HtmlEncode(m.LastFetch!.Message)}</p>"""
-                : $"""<p>Status: <b class="ok">cookie stored</b>{(m.Username is null ? "" : $" for @{HtmlEncode(m.Username)}")}</p>""";
+            : m.LastFetch is { Ok: false } failed
+                ? $"""<p>Status: <b class="fail">the last fetch failed</b>. {HtmlEncode(failed.Message)}</p>"""
+                : $"""<p>Status: <b class="ok">cookie stored</b>{account}{updated}</p>""";
+        var extensionStatus = session.ExtensionLastSeen is { } seen
+            ? $"""<p>Browser extension: <b class="ok">connected</b> <span class="muted">(last check-in {Local(seen)}; it sends the cookie whenever it changes)</span></p>"""
+            : """<p>Browser extension: <b>not set up</b>. In Brave, open <code>brave://extensions</code>, turn on Developer mode, click <i>Load unpacked</i> and pick the <code>extension</code> folder of this project. Stay logged in to instagram.com in Brave.</p>""";
 
         var values = new Dictionary<string, string>
         {
@@ -47,8 +55,8 @@ public static class SettingsPage
             ["notice"] = m.Notice is null ? "" : $"""<div class="notice{(m.NoticeIsError ? " error" : "")}">{HtmlEncode(m.Notice)}</div>""",
             ["antiforgery"] = token,
             ["session_status"] = sessionStatus,
-            ["username"] = HtmlEncode(m.Username ?? ""),
-            ["remove_form"] = !m.HasSession ? "" : $"""
+            ["extension_status"] = extensionStatus,
+            ["remove_form"] = !hasSession ? "" : $"""
                 <form method="post" action="settings/session/remove">{token}
                   <button type="submit" class="danger">Remove cookie</button>
                 </form>
@@ -56,9 +64,9 @@ public static class SettingsPage
             ["schedule"] = $"Runs every day at {m.DailyAt:HH:mm} ({HtmlEncode(TimeZoneInfo.Local.Id)}), plus up to {m.RandomDelayMinutes} minutes.",
             ["next_run"] = m.NextRunAt is { } next ? Local(next) : "—",
             ["last_fetch"] = m.LastFetch is null ? "never" : $"{Local(m.LastFetch.At)} · {(m.LastFetch.Ok ? "ok" : "failed")} · {HtmlEncode(m.LastFetch.Message)}",
-            ["fetch_disabled"] = m.HasSession && m.Running is null ? "" : "disabled",
+            ["fetch_disabled"] = hasSession && m.Running is null ? "" : "disabled",
             ["running"] = m.Running is not null ? $"{HtmlEncode(m.Running)} in progress. This page refreshes itself."
-                : m.HasSession ? "" : "Store a cookie first.",
+                : hasSession ? "" : "Needs a cookie first.",
             ["exports_hint"] = string.IsNullOrEmpty(m.ExportsPath)
                 ? "No watched folder is configured."
                 : "Or put it in your EXPORTS_DIR folder: every <code>instagram-*.zip</code> there is imported on the next daily run.",
