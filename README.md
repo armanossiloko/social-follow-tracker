@@ -1,8 +1,8 @@
 <img src="assets/icon.svg" width="64" height="64" alt="">
 
-# following
+# social-follow-tracker
 
-A daily report of your Instagram followers and following. It shows who doesn't follow you back, who you don't follow back, who unfollowed you, and every change between days. It runs on your PC in Docker (the app plus Postgres), and the report is served at <http://localhost:47321>.
+A daily report of your followers and following on social platforms. Instagram is the only one supported so far. It shows who doesn't follow you back, who you don't follow back, who unfollowed you, and every change between days. It runs on your PC in Docker (the app plus Postgres), and the report is served at <http://localhost:47321>.
 
 ## Who unfollowed you
 
