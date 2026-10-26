@@ -22,13 +22,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    # Only reachable from this PC. The page shows your follower data and can replace the stored cookie.
+    # Only reachable from this PC. The page shows your connection data and can replace the stored credentials.
     ports:
       - "127.0.0.1:${PORT:-47321}:8080"
     environment:
-      ConnectionStrings__Following: "Host=db;Database=following;Username=following;Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
+      ConnectionStrings__Tracker: "Host=db;Database=following;Username=following;Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
       TZ: ${TZ:-UTC}
-      Following__DailyAt: ${DAILY_AT:-09:00}
+      Tracker__DailyAt: ${DAILY_AT:-09:00}
     volumes:
       - keys:/keys
       - ${EXPORTS_DIR:-./imports}:/imports:ro

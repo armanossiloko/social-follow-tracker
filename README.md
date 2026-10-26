@@ -82,7 +82,7 @@ Two named volumes: `pgdata` (the database) and `keys` (the encryption keys).
 - Back up the database: `docker compose exec db pg_dump -U following following > backup.sql`
 - Wipe everything: `docker compose down -v`
 
-The schema is in `src/Following.Web/Data/Migrations` and is applied automatically on startup.
+The schema is in `src/ConnectionTracker.Web/Data/Migrations` and is applied automatically on startup.
 
 ## Limitations
 
@@ -95,13 +95,13 @@ The schema is in `src/Following.Web/Data/Migrations` and is applied automaticall
 
 ```powershell
 dotnet test
-dotnet tool restore; dotnet ef migrations add <Name> -p src/Following.Web -o Data/Migrations
+dotnet tool restore; dotnet ef migrations add <Name> -p src/ConnectionTracker.Web -o Data/Migrations
 ```
 
 The projects are:
-- `src/Following.Core`: the Instagram client, export parser, diff logic, schedule math and report template (`Report/report.html`)
-- `src/Following.Web`: the ASP.NET Core app (Postgres via EF Core, daily scheduler, Settings page)
-- `tests/Following.Tests`
+- `src/ConnectionTracker.Core`: the Instagram client, export parser, diff logic, schedule math and report template (`Report/report.html`)
+- `src/ConnectionTracker.Web`: the ASP.NET Core app (Postgres via EF Core, daily scheduler, Settings page)
+- `tests/ConnectionTracker.Tests`
 
 ## License
 

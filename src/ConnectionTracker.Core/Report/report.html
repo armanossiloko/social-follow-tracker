@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Social Connection Tracker</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --fg: #1f2328; --muted: #656d76; --border: #d0d7de; --bg: #ffffff; --subtle: #f6f8fa;
+    --link: #0969da; --red: #cf222e; --green: #1a7f37; --warn: #fff8c5; --error: #ffebe9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #e6edf3; --muted: #8d96a0; --border: #30363d; --bg: #0d1117; --subtle: #161b22;
+      --link: #4493f8; --red: #f85149; --green: #3fb950; --warn: #3b2e00; --error: #3c1618;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 24px 16px 48px; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  h1 { margin: 0; font-size: 22px; }
+  .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 4px 12px; }
+  .actions button {
+    padding: 3px 12px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--subtle); color: var(--fg); font: inherit; cursor: pointer;
+  }
+  .actions button:disabled { color: var(--muted); cursor: default; }
+  button.link { margin-left: 4px; padding: 0; border: 0; background: none; color: var(--link); font: inherit; cursor: pointer; }
+  button.link:hover { text-decoration: underline; }
+  .muted { color: var(--muted); }
+  .red { color: var(--red); }
+  .green { color: var(--green); }
+  .notice { margin: 16px 0 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--warn); }
+  .notice.error { background: var(--error); }
+  .notice.info { background: var(--subtle); }
+  .summary { margin: 16px 0 0; font-size: 16px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 16px 0 0; }
+  .stats div { color: var(--muted); font-size: 13px; }
+  .stats b { display: block; color: var(--fg); font-size: 22px; font-weight: 600; }
+  .tabs { display: flex; flex-wrap: wrap; margin-top: 24px; border-bottom: 1px solid var(--border); }
+  .tabs button {
+    margin-bottom: -1px; padding: 8px 12px; border: 0; border-bottom: 2px solid transparent;
+    background: none; color: var(--muted); font: inherit; cursor: pointer;
+  }
+  .tabs button:hover { color: var(--fg); }
+  .tabs button[aria-selected="true"] { color: var(--fg); font-weight: 600; border-bottom-color: var(--link); }
+  .count { margin-left: 4px; padding: 0 7px; border-radius: 10px; background: var(--subtle); font-size: 12px; font-weight: 400; }
+  .toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin: 12px 0; }
+  .toolbar p { margin: 0; }
+  input[type="search"] {
+    width: 240px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--fg); font: inherit;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { color: var(--muted); font-size: 13px; font-weight: 600; }
+  .badge { margin-left: 6px; padding: 0 6px; border-radius: 8px; background: var(--red); color: #fff; font-size: 11px; }
+  .empty { padding: 24px 8px; color: var(--muted); }
+  footer { margin-top: 32px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Social Connection Tracker <span class="muted" id="account"></span></h1>
+    <div class="actions">
+      <span class="muted" id="refresh-status" role="status"></span>
+      <button type="button" id="refresh" hidden>Refresh</button>
+      <a href="settings">Settings</a>
+    </div>
+  </header>
+  <div class="muted" id="updated"></div>
+  <div id="notices"></div>
+  <p class="summary" id="summary"></p>
+  <div class="stats" id="stats"></div>
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+  <div class="toolbar">
+    <p class="muted" id="desc"></p>
+    <input type="search" id="q" placeholder="Search" aria-label="Search" autocomplete="off">
+  </div>
+  <div id="panel" role="tabpanel"></div>
+  <footer id="footer"></footer>
+</main>
+
+<script id="report-data" type="application/json">__REPORT_DATA__</script>
+<script>
+(() => {
+  const data = JSON.parse(document.getElementById("report-data").textContent);
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const nf = new Intl.NumberFormat();
+  const day = (iso) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  const dateTime = (iso) => new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const link = (u) => `<a href="https://www.instagram.com/${encodeURIComponent(u)}/" target="_blank" rel="noopener noreferrer">@${esc(u)}</a>`;
+
+  const { latest, lists, people, events } = data;
+
+  // ---------- header ----------
+  $("account").textContent = data.account ? `@${data.account}` : "";
+  $("updated").textContent = latest
+    ? `Last snapshot ${dateTime(latest.takenAt)} (${latest.source === "fetch" ? "fetched" : "from export"})`
+    : "No data yet";
+
+  $("notices").innerHTML = data.warnings.map((w) =>
+    `<div class="notice ${esc(w.level)}"><b>${esc(w.title)}.</b> ${esc(w.detail)}</div>`).join("");
+
+  // ---------- refresh ----------
+  // Starts a fetch (or waits for whichever job is already running), then reloads to show the new snapshot.
+  if (data.refresh) {
+    const button = $("refresh"), status = $("refresh-status");
+    const wait = (running) => {
+      button.disabled = true;
+      status.className = "muted";
+      status.textContent = running === "Fetch" ? "Fetching, this takes a minute or two…" : `${running} in progress…`;
+      const poll = setInterval(async () => {
+        try {
+          const r = await fetch("refresh", { cache: "no-store" });
+          if (r.ok && !(await r.json()).running) { clearInterval(poll); location.reload(); }
+        } catch { /* server briefly unreachable; try again on the next tick */ }
+      }, 3000);
+    };
+    button.hidden = false;
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      status.textContent = "";
+      try {
+        const r = await fetch("refresh", { method: "POST", headers: { RequestVerificationToken: data.refresh.token } });
+        const body = await r.json().catch(() => null);
+        if (!r.ok) throw new Error((typeof body === "string" ? body : body?.error) ?? `The server answered ${r.status}.`);
+        body?.running ? wait(body.running) : location.reload();
+      } catch (e) {
+        status.className = "red";
+        status.textContent = e.message;
+        button.disabled = false;
+      }
+    });
+    if (data.refresh.running) wait(data.refresh.running);
+  }
+
+  // ---------- summary ----------
+  // Changes since you last cleared them (remembered in this browser), else since the snapshot before the latest.
+  const seenKey = `following.seen.${data.account ?? ""}`;
+  const seen = localStorage.getItem(seenKey);
+  let sinceAt = latest && seen && new Date(seen) <= new Date(latest.takenAt) ? seen : data.previousAt;
+  const isNew = (e) => !!sinceAt && new Date(e.at) > new Date(sinceAt);
+
+  function renderSummary() {
+    if (!latest) return;
+    if (!sinceAt) {
+      $("summary").textContent = "First snapshot. Changes show up after the next one.";
+      return;
+    }
+    const fresh = events.filter(isNew);
+    const count = (...kinds) => fresh.filter((e) => kinds.includes(e.kind)).length;
+    const followers = count("followedYou");
+    const parts = [
+      [count("unfollowedYou", "vanished"), "unfollowed you", "red"],
+      [count("leftYourFollowing"), "gone from your following", "red"],
+      [followers, followers === 1 ? "new follower" : "new followers", "green"],
+      [count("youFollowed"), "you followed", ""],
+      [count("renamed"), "renamed", ""],
+    ].filter(([n]) => n > 0).map(([n, label, cls]) => `<span class="${cls}">${nf.format(n)} ${label}</span>`);
+    $("summary").innerHTML = `Since ${esc(day(sinceAt))}: ` + (parts.length
+      ? parts.join(", ") + `. <button type="button" class="link" id="clear" title="Hide these until something else changes">Clear</button>`
+      : "no changes.");
+  }
+  renderSummary();
+  $("summary").addEventListener("click", (e) => {
+    if (!e.target.closest("#clear")) return;
+    localStorage.setItem(seenKey, latest.takenAt);
+    sinceAt = latest.takenAt;
+    renderSummary();
+    render();
+  });
+
+  if (latest) {
+    $("stats").innerHTML = [
+      ["Followers", latest.followers],
+      ["Following", latest.following],
+      ["Mutual", lists.mutual.length],
+      ["Not following you back", lists.notFollowingBack.length],
+      ["You don't follow back", lists.fans.length],
+    ].map(([label, n]) => `<div><b>${nf.format(n)}</b>${label}</div>`).join("");
+  }
+
+  // ---------- tabs ----------
+  // Only people who stopped following you. Someone gone from your own following list (usually because you
+  // unfollowed them) shows up in History instead.
+  const LOSSES = {
+    unfollowedYou: "Unfollowed you",
+    vanished: "Blocked you, or deactivated their account",
+  };
+  const HISTORY = {
+    followedYou: "followed you",
+    unfollowedYou: "unfollowed you",
+    youFollowed: "you followed",
+    leftYourFollowing: "gone from your following",
+    vanished: "blocked you or deactivated",
+    renamed: "renamed",
+  };
+  const losses = events.filter((e) => e.kind in LOSSES);
+
+  const sinceText = (s) => !s ? "" : s.exact ? day(s.at) : s.atOrBefore ? `before ${day(s.at)}` : `~${day(s.at)}`;
+  const whenText = (e) => !e.after || new Date(e.after).toDateString() === new Date(e.at).toDateString()
+    ? day(e.at)
+    : `${new Date(e.after).toLocaleDateString(undefined, { day: "numeric", month: "short" })} – ${day(e.at)}`;
+  const nowText = (e, p) => {
+    if (e.kind === "unfollowedYou") return p.followsYou ? `<span class="green">Follows you again</span>` : p.youFollow ? `<span class="red">You still follow them</span>` : "";
+    return p.followsYou || p.youFollow ? "Back" : "";
+  };
+  const match = (u, q) => !q || u.includes(q) || (people[u]?.name ?? "").toLowerCase().includes(q);
+
+  // Sort by display name (falling back to the username), A–Z with locale-aware accents; dated tabs go newest day first.
+  const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+  const byName = (a, b) => collator.compare(people[a]?.name || a, people[b]?.name || b) || collator.compare(a, b);
+  const sortNames = (list) => [...list].sort(byName);
+  const dayStart = (iso) => new Date(iso).setHours(0, 0, 0, 0);
+  const sortEvents = (list) => [...list].sort((a, b) => dayStart(b.at) - dayStart(a.at) || byName(a.username, b.username));
+
+  const TABS = [
+    {
+      id: "lost", label: "Unfollowed you", count: losses.length,
+      desc: "Found by comparing each snapshot with the one before it.",
+      empty: data.snapshotCount < 2 ? "Shows up after the second snapshot." : "Nobody so far.",
+      rows: (q) => sortEvents(losses.filter((e) => match(e.username, q))),
+      head: ["Who", "What happened", "When", "Now"],
+      row: (e) => [link(e.username) + (isNew(e) ? `<span class="badge">new</span>` : ""),
+        esc(LOSSES[e.kind]), esc(whenText(e)), nowText(e, people[e.username] ?? {})],
+    },
+    {
+      id: "notFollowingBack", label: "Not following you back", count: lists.notFollowingBack.length,
+      desc: "You follow them, they don't follow you.", empty: "Everyone you follow follows you back.",
+      rows: (q) => sortNames(lists.notFollowingBack.filter((u) => match(u, q))),
+      head: ["Who", "Name", "You followed"],
+      row: (u) => [link(u), esc(people[u]?.name), esc(sinceText(people[u]?.youFollowSince))],
+    },
+    {
+      id: "fans", label: "You don't follow back", count: lists.fans.length,
+      desc: "They follow you, you don't follow them.", empty: "You follow back everyone who follows you.",
+      rows: (q) => sortNames(lists.fans.filter((u) => match(u, q))),
+      head: ["Who", "Name", "Followed you"],
+      row: (u) => [link(u), esc(people[u]?.name), esc(sinceText(people[u]?.followsYouSince))],
+    },
+    {
+      id: "mutual", label: "Mutual", count: lists.mutual.length,
+      desc: "You follow each other.", empty: "No mutual follows.",
+      rows: (q) => sortNames(lists.mutual.filter((u) => match(u, q))),
+      head: ["Who", "Name", "Follows you since"],
+      row: (u) => [link(u), esc(people[u]?.name), esc(sinceText(people[u]?.followsYouSince))],
+    },
+    {
+      id: "history", label: "History", count: events.length,
+      desc: "Every change between snapshots, newest day first.", empty: "Shows up after the second snapshot.",
+      rows: (q) => sortEvents(events.filter((e) => match(e.username, q) || (e.previousUsername ?? "").includes(q))),
+      head: ["When", "Who", "Change"],
+      row: (e) => [esc(day(e.at)), link(e.username),
+        e.kind === "renamed" ? `renamed from @${esc(e.previousUsername)}` : esc(HISTORY[e.kind])],
+    },
+  ];
+
+  // Open on History; a #hash in the URL (set when switching tabs) wins.
+  const hash = location.hash.slice(1);
+  let tab = TABS.some((t) => t.id === hash) ? hash : "history";
+
+  $("tabs").innerHTML = TABS.map((t) =>
+    `<button role="tab" data-tab="${t.id}">${t.label}<span class="count">${nf.format(t.count)}</span></button>`).join("");
+  $("tabs").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-tab]");
+    if (!b) return;
+    tab = b.dataset.tab;
+    history.replaceState(null, "", "#" + tab);
+    render();
+  });
+  $("q").addEventListener("input", render);
+
+  function render() {
+    const t = TABS.find((x) => x.id === tab);
+    document.querySelectorAll("#tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+    $("desc").textContent = t.desc;
+    const q = $("q").value.trim().toLowerCase().replace(/^@/, "");
+    const rows = t.rows(q);
+    $("panel").innerHTML = rows.length
+      ? `<table><thead><tr>${t.head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>` +
+        rows.map((r) => `<tr>${t.row(r).map((c) => `<td>${c ?? ""}</td>`).join("")}</tr>`).join("") +
+        `</tbody></table>`
+      : `<div class="empty">${q ? "No matches." : esc(t.empty)}</div>`;
+  }
+  render();
+
+  $("footer").textContent = (data.nextRunAt ? `Next run ${dateTime(data.nextRunAt)}. ` : "") +
+    (data.firstSnapshotAt ? `Tracking since ${day(data.firstSnapshotAt)}.` : "");
+})();
+</script>
+</body>
+</html>
