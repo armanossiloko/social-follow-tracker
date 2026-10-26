@@ -59,13 +59,13 @@
 <main>
   <header>
     <h1>Settings</h1>
-    <a href="./">← Back to report</a>
+    <a href="./">← Back to the overview</a>
   </header>
 
   {{notice}}
 
   <section>
-    <h2>Instagram session</h2>
+    <h2>Instagram</h2>
     {{session_status}}
     {{extension_status}}
     {{remove_form}}
@@ -86,8 +86,41 @@
   </section>
 
   <section>
+    <h2>Facebook</h2>
+    {{facebook_status}}
+    <p>Facebook has no API for friends lists, so its data comes from the official export. Each export is a snapshot;
+      comparing two shows who is no longer your friend.</p>
+    <details>
+      <summary>How to get an export</summary>
+      <ol>
+        <li>On Facebook, open <i>Settings &amp; privacy → Settings → Accounts Center → Your information and permissions → Download your information</i>.</li>
+        <li>Pick your Facebook profile, then <i>Some of your information</i> and tick <b>Friends</b>.</li>
+        <li>Choose <i>Download to device</i>, date range <i>All time</i>, format <b>JSON</b>.</li>
+        <li>When it's ready, upload the zip under <a href="settings#import">Import an export</a>.</li>
+      </ol>
+    </details>
+  </section>
+
+  <section>
+    <h2>Steam</h2>
+    {{steam_status}}
+    <form method="post" action="settings/steam" autocomplete="off">
+      {{antiforgery}}
+      <label>Steam profile <input type="text" name="profile" value="{{steam_profile}}" required
+        placeholder="SteamID64, profile link or custom URL name"></label>
+      <label>Web API key <input type="password" name="apiKey" required></label>
+      <button type="submit">{{steam_button}}</button>
+    </form>
+    {{steam_remove_form}}
+    <p class="muted" style="margin-top:10px">Uses Steam's official Web API. Get a key at
+      <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noopener noreferrer">steamcommunity.com/dev/apikey</a>
+      (any domain name will do, e.g. <code>localhost</code>). Your friends list must be public: in Steam, open
+      <i>Edit Profile → Privacy Settings</i> and set <i>Friends List</i> to <i>Public</i>.</p>
+  </section>
+
+  <section>
     <h2>Daily run</h2>
-    <p>{{schedule}}<br>Next run: {{next_run}}<br>Last fetch: {{last_fetch}}</p>
+    <p>{{schedule}}<br>Next run: {{next_run}}<br>{{last_fetches}}</p>
     <form method="post" action="settings/fetch" class="row">
       {{antiforgery}}
       <button type="submit" {{fetch_disabled}}>Fetch now</button>
@@ -95,9 +128,10 @@
     </form>
   </section>
 
-  <section>
+  <section id="import">
     <h2>Import an export</h2>
-    <p class="muted">An official Instagram export (JSON format, "Followers and following"). Exports also include the date of each follow.</p>
+    <p class="muted">An official export in JSON format: Instagram's "Followers and following", or Facebook's "Friends".
+      The app tells them apart by what's inside. Exports also include the date of each follow or friendship.</p>
     <form method="post" action="settings/import" enctype="multipart/form-data" class="row">
       {{antiforgery}}
       <input type="file" name="file" accept=".zip,application/zip" required>

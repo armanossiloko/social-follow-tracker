@@ -36,7 +36,7 @@ public sealed class DailyScheduler(
             {
                 DateTimeOffset? lastRun;
                 using (var scope = scopes.CreateScope())
-                    lastRun = (await scope.ServiceProvider.GetRequiredService<SnapshotRepository>().LastRunAsync(RunKind.Daily, okOnly: false, stop))?.At;
+                    lastRun = (await scope.ServiceProvider.GetRequiredService<SnapshotRepository>().LastRunAsync(RunKind.Daily, null, okOnly: false, stop))?.At;
 
                 var now = clock.GetUtcNow();
                 var due = RunSchedule.NextRun(now, lastRun, at, zone);

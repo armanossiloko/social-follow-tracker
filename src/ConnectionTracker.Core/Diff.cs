@@ -12,12 +12,18 @@ public enum EventKind
     Vanished,
     /// <summary>Same account (matched by Instagram's id) under a new username.</summary>
     Renamed,
+    /// <summary>New on your friends list.</summary>
+    BecameFriends,
+    /// <summary>Gone from your friends list: they removed you, or their account is gone (or you removed them, if the platform doesn't say).</summary>
+    FriendRemoved,
+    /// <summary>Gone from your friends list, and the platform says you removed them.</summary>
+    YouRemovedFriend,
 }
 
 /// <param name="At">The snapshot in which the change was first seen.</param>
 /// <param name="After">The snapshot before it: the change happened between <paramref name="After"/> and <paramref name="At"/>.</param>
 /// <param name="PreviousUsername">For <see cref="EventKind.Renamed"/>: the old username.</param>
-/// <param name="FollowedSince">For removals: since when the follow had existed.</param>
+/// <param name="FollowedSince">For removals: since when the follow or friendship had existed.</param>
 public sealed record FollowEvent(
     DateTimeOffset At,
     EventKind Kind,
@@ -26,16 +32,24 @@ public sealed record FollowEvent(
     string? PreviousUsername = null,
     Since? FollowedSince = null);
 
-/// <param name="Exact">True when the export told us the follow time; false means "first seen in this snapshot".</param>
+/// <param name="Exact">True when the platform told us the follow time; false means "first seen in this snapshot".</param>
 /// <param name="AtOrBefore">True when present in the very first snapshot, so the follow happened at or before <paramref name="At"/>.</param>
 public sealed record Since(DateTimeOffset At, bool Exact, bool AtOrBefore);
 
 public sealed record Relationships(List<string> NotFollowingBack, List<string> Fans, List<string> Mutual);
 
-public sealed record History(List<FollowEvent> Events, Dictionary<string, Since> FollowerSince, Dictionary<string, Since> FollowingSince);
+/// <param name="Since">For each list, how long each person currently on it has been there.</param>
+public sealed record History(List<FollowEvent> Events, Dictionary<ConnectionList, Dictionary<string, Since>> Since)
+{
+    public Dictionary<string, Since> FollowerSince => Since[ConnectionList.Followers];
+    public Dictionary<string, Since> FollowingSince => Since[ConnectionList.Following];
+    public Dictionary<string, Since> FriendSince => Since[ConnectionList.Friends];
+}
 
 public static class Diff
 {
+    private static readonly ConnectionList[] TrackedLists = [ConnectionList.Followers, ConnectionList.Following, ConnectionList.Friends];
+
     public static Relationships Relate(Snapshot snapshot)
     {
         var followers = snapshot.Followers.Select(p => p.Username).ToHashSet();
@@ -55,9 +69,15 @@ public static class Diff
 
         var (followersBefore, followersAfter) = (Before(previous.Followers), After(current.Followers));
         var (followingBefore, followingAfter) = (Before(previous.Following), After(current.Following));
+        var (friendsBefore, friendsAfter) = (Before(previous.Friends), After(current.Friends));
         var lostFollowers = followersBefore.Except(followersAfter).ToHashSet();
         var lostFollowing = followingBefore.Except(followingAfter).ToHashSet();
         var vanished = lostFollowers.Intersect(lostFollowing).ToHashSet();
+        var lostFriends = friendsBefore.Except(friendsAfter).ToHashSet();
+        // The removed list goes back years; only a removal since the previous snapshot explains this loss.
+        var removedByYou = lostFriends.Intersect(current.RemovedFriends
+            .Where(p => p.FollowedAt is not { } at || at > previous.TakenAt)
+            .Select(p => p.Username)).ToHashSet();
 
         var events = new List<FollowEvent>();
         events.AddRange(renames.OrderBy(r => r.Value, StringComparer.Ordinal)
@@ -67,6 +87,9 @@ public static class Diff
         Add(EventKind.Vanished, vanished);
         Add(EventKind.YouFollowed, followingAfter.Except(followingBefore));
         Add(EventKind.LeftYourFollowing, lostFollowing.Except(vanished));
+        Add(EventKind.BecameFriends, friendsAfter.Except(friendsBefore));
+        Add(EventKind.FriendRemoved, lostFriends.Except(removedByYou));
+        Add(EventKind.YouRemovedFriend, removedByYou);
         return events;
 
         void Add(EventKind kind, IEnumerable<string> usernames) =>
@@ -76,7 +99,7 @@ public static class Diff
     /// <summary>Old username to new username, for accounts whose id appears under a different name. Needs ids, i.e. fetched snapshots.</summary>
     internal static Dictionary<string, string> Renames(Snapshot previous, Snapshot current)
     {
-        static Dictionary<string, string> ById(Snapshot s) => s.Followers.Concat(s.Following)
+        static Dictionary<string, string> ById(Snapshot s) => s.Followers.Concat(s.Following).Concat(s.Friends)
             .Where(p => !string.IsNullOrEmpty(p.Pk))
             .DistinctBy(p => p.Pk)
             .ToDictionary(p => p.Pk!, p => p.Username);
@@ -90,11 +113,11 @@ public static class Diff
     }
 
     /// <summary>All change events (oldest first), plus how long each current person has been on each list.</summary>
+    /// <param name="snapshots">One platform's snapshots, oldest first.</param>
     public static History BuildHistory(IReadOnlyList<Snapshot> snapshots)
     {
         var events = new List<FollowEvent>();
-        var followerSince = new Dictionary<string, Since>();
-        var followingSince = new Dictionary<string, Since>();
+        var since = TrackedLists.ToDictionary(l => l, _ => new Dictionary<string, Since>());
         for (var i = 0; i < snapshots.Count; i++)
         {
             if (i > 0)
@@ -102,24 +125,23 @@ public static class Diff
                 foreach (var e in Changes(snapshots[i - 1], snapshots[i]))
                 {
                     if (e.Kind == EventKind.Renamed)
-                    {
-                        Move(followerSince, e.PreviousUsername!, e.Username);
-                        Move(followingSince, e.PreviousUsername!, e.Username);
-                    }
+                        foreach (var list in since.Values)
+                            Move(list, e.PreviousUsername!, e.Username);
                     // Record how long the follow lasted before Track() forgets it.
-                    var since = e.Kind switch
+                    var lasted = e.Kind switch
                     {
-                        EventKind.UnfollowedYou or EventKind.Vanished => followerSince.GetValueOrDefault(e.Username),
-                        EventKind.LeftYourFollowing => followingSince.GetValueOrDefault(e.Username),
+                        EventKind.UnfollowedYou or EventKind.Vanished => since[ConnectionList.Followers].GetValueOrDefault(e.Username),
+                        EventKind.LeftYourFollowing => since[ConnectionList.Following].GetValueOrDefault(e.Username),
+                        EventKind.FriendRemoved or EventKind.YouRemovedFriend => since[ConnectionList.Friends].GetValueOrDefault(e.Username),
                         _ => null,
                     };
-                    events.Add(since is null ? e : e with { FollowedSince = since });
+                    events.Add(lasted is null ? e : e with { FollowedSince = lasted });
                 }
             }
-            Track(snapshots[i].Followers, followerSince, snapshots[i], i == 0);
-            Track(snapshots[i].Following, followingSince, snapshots[i], i == 0);
+            foreach (var (list, sinceByName) in since)
+                Track(snapshots[i].List(list), sinceByName, snapshots[i], i == 0);
         }
-        return new(events, followerSince, followingSince);
+        return new(events, since);
 
         static void Move(Dictionary<string, Since> since, string from, string to)
         {

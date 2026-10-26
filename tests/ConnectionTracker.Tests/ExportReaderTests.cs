@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using ConnectionTracker.Core;
+using ConnectionTracker.Core.Instagram;
 
 namespace ConnectionTracker.Tests;
 
@@ -26,7 +27,7 @@ public class ExportReaderTests
     [Fact]
     public void Parses_both_entry_shapes_and_normalizes_usernames()
     {
-        var snap = ExportReader.Parse(
+        var snap = InstagramExport.Parse(
             new() { ["followers_1.json"] = FollowersValueShape, ["following.json"] = FollowingTitleShape }, T, "x.zip");
 
         Assert.Equal(["alice", "bob"], snap.Followers.Select(p => p.Username).Order());
@@ -39,7 +40,7 @@ public class ExportReaderTests
     public void Merges_multiple_follower_files_and_wrapped_arrays()
     {
         var second = """{"relationships_followers": [{"title": "", "string_list_data": [{"href": "https://www.instagram.com/dave", "value": "dave", "timestamp": 1}]}]}""";
-        var snap = ExportReader.Parse(
+        var snap = InstagramExport.Parse(
             new() { ["followers_1.json"] = FollowersValueShape, ["followers_2.json"] = second, ["following.json"] = "[]" }, T, "x");
         Assert.Equal(3, snap.Followers.Count);
         Assert.Empty(snap.Following);
@@ -49,7 +50,7 @@ public class ExportReaderTests
     public void Falls_back_to_href_when_value_and_title_are_missing()
     {
         var followers = """[{"title": "", "string_list_data": [{"href": "https://www.instagram.com/erin/"}]}]""";
-        var snap = ExportReader.Parse(new() { ["followers_1.json"] = followers, ["following.json"] = "[]" }, T, "x");
+        var snap = InstagramExport.Parse(new() { ["followers_1.json"] = followers, ["following.json"] = "[]" }, T, "x");
         Assert.Equal("erin", snap.Followers.Single().Username);
         Assert.Null(snap.Followers.Single().FollowedAt);
     }
@@ -57,7 +58,7 @@ public class ExportReaderTests
     [Fact]
     public void Missing_files_explain_how_to_export()
     {
-        var e = Assert.Throws<ExportException>(() => ExportReader.Parse(new() { ["following.json"] = "[]" }, T, "x"));
+        var e = Assert.Throws<ExportException>(() => InstagramExport.Parse(new() { ["following.json"] = "[]" }, T, "x"));
         Assert.Contains("JSON format", e.Message);
     }
 
@@ -76,8 +77,8 @@ public class ExportReaderTests
                 Add(zip, "your_instagram_activity/likes/liked_posts.json", "[]");
             }
 
-            Assert.True(ExportReader.ContainsFollowData(zipPath));
-            var snap = ExportReader.Load(zipPath);
+            Assert.True(ExportReader.ContainsConnectionData(zipPath));
+            var snap = Assert.Single(ExportReader.Load(zipPath));
             Assert.Equal(2, snap.Followers.Count);
             Assert.Equal(2, snap.Following.Count);
             Assert.Equal("instagram-me-2026-10-25.zip", snap.SourceRef);

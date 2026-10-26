@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using ConnectionTracker.Core;
 using ConnectionTracker.Core.Instagram;
 using ConnectionTracker.Web.Data;
 
@@ -16,13 +17,13 @@ public sealed record SessionCookie(string? SessionId);
 public sealed record SessionUpdate(bool Ok, string Message, bool Changed = false, bool WrongAccount = false);
 
 /// <summary>Validates and stores a new session cookie, from the Settings form or the browser extension.</summary>
-public sealed class SessionUpdater(
-    SessionStore store,
+public sealed class InstagramSessionUpdater(
+    InstagramSessionStore store,
     SnapshotRepository repo,
     InstagramClientFactory clients,
     JobRunner runner,
     TimeProvider clock,
-    ILogger<SessionUpdater> log)
+    ILogger<InstagramSessionUpdater> log)
 {
     /// <param name="sameAccountOnly">
     /// Refuse a cookie for a different Instagram account than the one being tracked. The extension sets this, so
@@ -77,8 +78,8 @@ public sealed class SessionUpdater(
         log.LogInformation("Session cookie updated by {Source} for {User}", source, username ?? userId);
 
         // A fresh cookie after a failed fetch (or before the first one): fetch now instead of waiting for tomorrow.
-        var lastFetch = await repo.LastRunAsync(RunKind.Fetch, okOnly: false, ct);
-        var fetching = (lastFetch is null || !lastFetch.Ok) && runner.TryStart("Fetch", (jobs, c) => jobs.FetchAsync(c));
+        var lastFetch = await repo.LastRunAsync(RunKind.Fetch, Platforms.Instagram, okOnly: false, ct);
+        var fetching = (lastFetch is null || !lastFetch.Ok) && runner.TryStart("Instagram fetch", (jobs, c) => jobs.FetchAsync(Platforms.Instagram, c));
 
         return new(true, $"Cookie saved{(username is null ? "" : $" for @{username}")}." + (fetching ? " Fetching now." : ""), Changed: true);
     }

@@ -5,13 +5,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ConnectionTracker.Core.Instagram;
 
-public class InstagramException(string message) : Exception(message);
+public class InstagramException(string message) : FetchException(message);
 
 public sealed class SessionExpiredException(string message) : InstagramException(message);
 
 public sealed class RateLimitedException(string message) : InstagramException(message);
-
-public sealed class IncompleteFetchException(string message) : InstagramException(message);
 
 /// <summary>
 /// Reads follower/following lists through the endpoints instagram.com itself calls.
@@ -114,15 +112,15 @@ public sealed class InstagramClient
         }
     }
 
-    public async Task<List<Person>> GetListAsync(FollowList list, CancellationToken ct = default)
+    public async Task<List<Person>> GetListAsync(ConnectionList list, CancellationToken ct = default)
     {
-        var kind = list == FollowList.Followers ? "followers" : "following";
+        var kind = list == ConnectionList.Followers ? "followers" : "following";
         var people = new Dictionary<string, Person>();
         string? maxId = null;
         do
         {
             var query = $"count={PageSize}";
-            if (list == FollowList.Followers) query += "&search_surface=follow_list_page";
+            if (list == ConnectionList.Followers) query += "&search_surface=follow_list_page";
             if (maxId is not null) query += "&max_id=" + Uri.EscapeDataString(maxId);
 
             using var doc = await GetAsync($"/api/v1/friendships/{UserId}/{kind}/?{query}", ct);

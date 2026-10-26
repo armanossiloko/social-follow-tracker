@@ -12,6 +12,15 @@ public class DiffTests
         Following = [.. following.Select(u => new Person(u))],
     };
 
+    internal static Snapshot Friends(int day, string[] friends, string platform = Platforms.Steam, Person[]? removed = null) => new()
+    {
+        Platform = platform,
+        TakenAt = new DateTimeOffset(2026, 10, day, 9, 0, 0, TimeSpan.Zero),
+        Source = SnapshotSource.Fetch,
+        Friends = [.. friends.Select(u => new Person(u))],
+        RemovedFriends = [.. removed ?? []],
+    };
+
     [Fact]
     public void Splits_into_not_following_back_fans_and_mutual()
     {
@@ -130,5 +139,35 @@ public class DiffTests
 
         Assert.Equal(exact, h.FollowerSince["ann"].At);
         Assert.True(h.FollowerSince["ann"].Exact);
+    }
+
+    [Fact]
+    public void Friends_lists_report_new_and_lost_friends_and_how_long_they_lasted()
+    {
+        var snaps = new[]
+        {
+            Friends(1, ["ann", "ben"]),
+            Friends(2, ["ann", "ben", "cat"]),
+            Friends(3, ["ann", "cat"]),
+        };
+
+        var h = Diff.BuildHistory(snaps);
+
+        Assert.Equal([(EventKind.BecameFriends, "cat"), (EventKind.FriendRemoved, "ben")], Kinds(h.Events));
+        Assert.True(h.Events[1].FollowedSince!.AtOrBefore); // friends since the first snapshot
+        Assert.Equal(snaps[1].TakenAt, h.FriendSince["cat"].At);
+    }
+
+    [Fact]
+    public void A_friend_you_removed_since_the_last_snapshot_is_told_apart()
+    {
+        var before = Friends(1, ["ann", "ben", "cat"], Platforms.Facebook);
+        var after = Friends(5, ["cat"], Platforms.Facebook, removed:
+        [
+            new Person("ann", FollowedAt: before.TakenAt.AddDays(2)), // removed by you, after the last export
+            new Person("ben", FollowedAt: before.TakenAt.AddDays(-300)), // removed long ago; re-added since, and now gone again
+        ]);
+
+        Assert.Equal([(EventKind.FriendRemoved, "ben"), (EventKind.YouRemovedFriend, "ann")], Kinds(Diff.Changes(before, after)));
     }
 }

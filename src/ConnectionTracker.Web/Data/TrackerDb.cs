@@ -16,7 +16,8 @@ public sealed class TrackerDb(DbContextOptions<TrackerDb> options) : DbContext(o
         model.Entity<SnapshotRow>(e =>
         {
             e.ToTable("snapshots");
-            e.HasIndex(s => s.TakenAt);
+            e.HasIndex(s => new { s.Platform, s.TakenAt });
+            e.Property(s => s.Platform).HasMaxLength(16);
             e.Property(s => s.Source).HasMaxLength(16);
             e.HasMany(s => s.Entries).WithOne().HasForeignKey(x => x.SnapshotId).OnDelete(DeleteBehavior.Cascade);
         });
@@ -36,6 +37,7 @@ public sealed class TrackerDb(DbContextOptions<TrackerDb> options) : DbContext(o
             e.ToTable("runs");
             e.HasIndex(r => new { r.Kind, r.At });
             e.Property(r => r.Kind).HasMaxLength(16);
+            e.Property(r => r.Platform).HasMaxLength(16);
         });
         model.Entity<SettingRow>(e =>
         {
@@ -48,6 +50,7 @@ public sealed class TrackerDb(DbContextOptions<TrackerDb> options) : DbContext(o
 public sealed class SnapshotRow
 {
     public long Id { get; set; }
+    public required string Platform { get; set; }
     public DateTimeOffset TakenAt { get; set; }
     public required string Source { get; set; }
     public string? SourceRef { get; set; }
@@ -60,7 +63,7 @@ public sealed class SnapshotRow
 public sealed class EntryRow
 {
     public long SnapshotId { get; set; }
-    public FollowList List { get; set; }
+    public ConnectionList List { get; set; }
     public required string Username { get; set; }
     public string? FullName { get; set; }
     public string? Pk { get; set; }
@@ -80,6 +83,8 @@ public sealed class RunRow
     public long Id { get; set; }
     public DateTimeOffset At { get; set; }
     public required string Kind { get; set; }
+    /// <summary>The platform a fetch or import was for; null for the daily run as a whole.</summary>
+    public string? Platform { get; set; }
     public bool Ok { get; set; }
     public required string Message { get; set; }
 }
@@ -96,4 +101,18 @@ public sealed class SettingRow
 {
     public required string Key { get; set; }
     public required string Value { get; set; }
+}
+
+public static class SettingsTable
+{
+    public static async Task<string?> GetSettingAsync(this TrackerDb db, string key, CancellationToken ct) =>
+        (await db.Settings.AsNoTracking().FirstOrDefaultAsync(s => s.Key == key, ct))?.Value;
+
+    /// <summary>Adds or updates the value; it's written on the next SaveChanges.</summary>
+    public static async Task SetSettingAsync(this TrackerDb db, string key, string value, CancellationToken ct)
+    {
+        var row = await db.Settings.FindAsync([key], ct);
+        if (row is null) db.Settings.Add(new SettingRow { Key = key, Value = value });
+        else row.Value = value;
+    }
 }

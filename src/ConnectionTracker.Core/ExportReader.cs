@@ -1,34 +1,35 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
-using System.Text.RegularExpressions;
+using ConnectionTracker.Core.Facebook;
+using ConnectionTracker.Core.Instagram;
 
 namespace ConnectionTracker.Core;
 
 public sealed class ExportException(string message) : Exception(message);
 
 /// <summary>
-/// Reads Instagram's official "Download your information" export (JSON format).
-/// The relevant files live under connections/followers_and_following/:
-///   followers_1.json, followers_2.json, ... and following.json.
-/// Instagram has shipped two entry shapes; both are handled:
-///   {"title": "", "string_list_data": [{"href": ".../alice", "value": "alice", "timestamp": 1700000000}]}
-///   {"title": "alice", "string_list_data": [{"href": ".../_u/alice", "timestamp": 1700000000}]}
+/// Reads the official "Download your information" exports from Meta's Accounts Center (JSON format). The platform is
+/// recognized by what's inside: Instagram's followers and following, or Facebook's friends. A zip holding both yields
+/// a snapshot for each.
 /// </summary>
-public static partial class ExportReader
+public static class ExportReader
 {
-    [GeneratedRegex(@"^followers(_\d+)?\.json$", RegexOptions.IgnoreCase)]
-    private static partial Regex FollowersFile();
+    private static readonly (string Platform, Func<string, bool> IsWanted, Func<Dictionary<string, string>, DateTimeOffset, string, Snapshot> Parse)[] Formats =
+    [
+        (Platforms.Instagram, InstagramExport.IsWanted, InstagramExport.Parse),
+        (Platforms.Facebook, FacebookExport.IsWanted, FacebookExport.Parse),
+    ];
 
     /// <summary>Load from an export .zip or an extracted export folder on disk.</summary>
-    public static Snapshot Load(string path)
+    public static List<Snapshot> Load(string path)
     {
         if (Directory.Exists(path))
         {
-            Dictionary<string, string> files = [];
+            var files = Formats.ToDictionary(f => f.Platform, _ => new Dictionary<string, string>());
             foreach (var file in Directory.EnumerateFiles(path, "*.json", SearchOption.AllDirectories))
-                if (IsWanted(Path.GetRelativePath(path, file)))
-                    files[Path.GetFileName(file).ToLowerInvariant()] = File.ReadAllText(file);
+                foreach (var format in Formats.Where(f => f.IsWanted(Path.GetRelativePath(path, file))))
+                    files[format.Platform][Path.GetFileName(file).ToLowerInvariant()] = File.ReadAllText(file);
             return Parse(files, Directory.GetLastWriteTimeUtc(path), Path.GetFileName(path));
         }
         if (!File.Exists(path)) throw new ExportException($"{path} does not exist.");
@@ -37,21 +38,24 @@ public static partial class ExportReader
     }
 
     /// <summary>
-    /// Load from a zip stream (e.g. an upload). The snapshot is dated by the newest relevant file inside the zip,
-    /// which is when Instagram generated the export; <paramref name="fallbackTakenAt"/> is used if that's missing.
+    /// Load from a zip stream (e.g. an upload). Snapshots are dated by the newest relevant file inside the zip,
+    /// which is when the export was generated; <paramref name="fallbackTakenAt"/> is used if that's missing.
     /// </summary>
-    public static Snapshot LoadZip(Stream zipStream, string name, DateTimeOffset fallbackTakenAt)
+    public static List<Snapshot> LoadZip(Stream zipStream, string name, DateTimeOffset fallbackTakenAt)
     {
-        Dictionary<string, string> files = [];
+        var files = Formats.ToDictionary(f => f.Platform, _ => new Dictionary<string, string>());
         DateTimeOffset? newest = null;
         try
         {
             using var zip = new ZipArchive(zipStream, ZipArchiveMode.Read, leaveOpen: true);
             foreach (var entry in zip.Entries)
             {
-                if (!IsWanted(entry.FullName)) continue;
+                var formats = Formats.Where(f => f.IsWanted(entry.FullName)).ToList();
+                if (formats.Count == 0) continue;
                 using var reader = new StreamReader(entry.Open());
-                files[entry.Name.ToLowerInvariant()] = reader.ReadToEnd();
+                var text = reader.ReadToEnd();
+                foreach (var format in formats)
+                    files[format.Platform][entry.Name.ToLowerInvariant()] = text;
                 if (newest is null || entry.LastWriteTime > newest) newest = entry.LastWriteTime;
             }
         }
@@ -64,13 +68,13 @@ public static partial class ExportReader
         return Parse(files, takenAt.ToUniversalTime(), name);
     }
 
-    /// <summary>Quick check used when scanning Downloads: does this zip hold follower data?</summary>
-    public static bool ContainsFollowData(string zipPath)
+    /// <summary>Quick check used when scanning the watched folder: does this zip hold connection data?</summary>
+    public static bool ContainsConnectionData(string zipPath)
     {
         try
         {
             using var zip = ZipFile.OpenRead(zipPath);
-            return zip.Entries.Any(e => IsWanted(e.FullName));
+            return zip.Entries.Any(e => Formats.Any(f => f.IsWanted(e.FullName)));
         }
         catch (Exception e) when (e is InvalidDataException or IOException or UnauthorizedAccessException)
         {
@@ -86,81 +90,48 @@ public static partial class ExportReader
 
     public static string Sha256(Stream stream) => Convert.ToHexStringLower(SHA256.HashData(stream));
 
-    /// <param name="files">Lower-cased file name to JSON text.</param>
-    internal static Snapshot Parse(Dictionary<string, string> files, DateTimeOffset takenAt, string sourceRef)
+    /// <param name="files">Per platform: lower-cased file name to JSON text.</param>
+    private static List<Snapshot> Parse(Dictionary<string, Dictionary<string, string>> files, DateTimeOffset takenAt, string sourceRef)
     {
-        var followerFiles = files.Keys.Where(k => FollowersFile().IsMatch(k)).Order().ToList();
-        if (followerFiles.Count == 0 || !files.ContainsKey("following.json"))
+        var found = Formats.Where(f => files[f.Platform].Count > 0).ToList();
+        if (found.Count == 0)
             throw new ExportException(
-                "No followers_*.json / following.json found. Request the export in JSON format (not HTML) " +
-                "and include \"Followers and following\".");
-
-        var followers = new Dictionary<string, Person>();
-        foreach (var name in followerFiles)
-            ParseEntries(EntryArray(files[name]), followers);
-        var following = new Dictionary<string, Person>();
-        ParseEntries(EntryArray(files["following.json"]), following);
-
-        return new Snapshot
-        {
-            TakenAt = takenAt,
-            Source = SnapshotSource.Export,
-            SourceRef = sourceRef,
-            Followers = [.. followers.Values],
-            Following = [.. following.Values],
-        };
+                "This doesn't contain Instagram followers and following or Facebook friends. Request the export in JSON " +
+                "format (not HTML) and include \"Followers and following\" (Instagram) or \"Friends\" (Facebook).");
+        return [.. found.Select(f => f.Parse(files[f.Platform], takenAt, sourceRef))];
     }
+}
 
-    private static bool IsWanted(string relativePath)
-    {
-        var parts = relativePath.Replace('\\', '/').Split('/');
-        var name = parts[^1];
-        return parts.Contains("followers_and_following", StringComparer.OrdinalIgnoreCase)
-               && (FollowersFile().IsMatch(name) || name.Equals("following.json", StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>A file is either a bare array or an object wrapping one (e.g. "relationships_following").</summary>
-    private static JsonElement EntryArray(string json)
+/// <summary>JSON shapes shared by Meta's exports.</summary>
+internal static class ExportJson
+{
+    /// <summary>A file is either a bare array or an object wrapping one (e.g. "relationships_following", "friends_v2").</summary>
+    public static JsonElement EntryArray(string json, string what)
     {
         var root = JsonDocument.Parse(json).RootElement;
         if (root.ValueKind == JsonValueKind.Array) return root;
         if (root.ValueKind == JsonValueKind.Object)
             foreach (var prop in root.EnumerateObject())
-                if (prop.Name.StartsWith("relationships_", StringComparison.Ordinal) && prop.Value.ValueKind == JsonValueKind.Array)
+                if (prop.Value.ValueKind == JsonValueKind.Array)
                     return prop.Value;
-        throw new ExportException("Unexpected structure in followers/following JSON.");
+        throw new ExportException($"Unexpected structure in the {what} JSON.");
     }
 
-    private static void ParseEntries(JsonElement entries, Dictionary<string, Person> into)
-    {
-        foreach (var entry in entries.EnumerateArray())
-        {
-            JsonElement data = default;
-            if (entry.TryGetProperty("string_list_data", out var list) && list.ValueKind == JsonValueKind.Array && list.GetArrayLength() > 0)
-                data = list[0];
+    /// <summary>The first item of "string_list_data", where newer exports keep the value and timestamp.</summary>
+    public static JsonElement ListData(JsonElement entry) =>
+        entry.TryGetProperty("string_list_data", out var list) && list.ValueKind == JsonValueKind.Array && list.GetArrayLength() > 0
+            ? list[0]
+            : default;
 
-            var username = StringProp(data, "value") ?? StringProp(entry, "title") ?? UsernameFromHref(StringProp(data, "href"));
-            if (username is null) continue;
-
-            DateTimeOffset? followedAt = null;
-            if (data.ValueKind == JsonValueKind.Object && data.TryGetProperty("timestamp", out var ts) && ts.TryGetInt64(out var seconds) && seconds > 0)
-                followedAt = DateTimeOffset.FromUnixTimeSeconds(seconds);
-
-            var key = Usernames.Normalize(username);
-            into[key] = new Person(key, FollowedAt: followedAt);
-        }
-    }
-
-    private static string? StringProp(JsonElement element, string name) =>
+    public static string? StringProp(JsonElement element, string name) =>
         element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var v)
         && v.ValueKind == JsonValueKind.String && v.GetString() is { Length: > 0 } s
             ? s
             : null;
 
-    private static string? UsernameFromHref(string? href)
-    {
-        if (href is null || !Uri.TryCreate(href, UriKind.Absolute, out var uri)) return null;
-        var last = uri.AbsolutePath.Trim('/').Split('/')[^1];
-        return last is { Length: > 0 } and not "_u" ? last : null;
-    }
+    public static DateTimeOffset? Timestamp(JsonElement element) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty("timestamp", out var ts)
+        && ts.TryGetInt64(out var seconds) && seconds > 0
+            ? DateTimeOffset.FromUnixTimeSeconds(seconds)
+            : null;
 }

@@ -7,30 +7,40 @@ public class ReportTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 2, 9, 0, 0, TimeSpan.Zero);
 
-    private static ReportContext Context(IReadOnlyList<Snapshot> snapshots, bool hasSession = false, RunSummary? lastFetch = null, RunSummary? lastOk = null) =>
-        new(snapshots, "me", hasSession, lastFetch, lastOk, NextRunAt: null, Now);
+    private static ReportContext Context(IReadOnlyList<Snapshot> instagram, IReadOnlyList<Snapshot>? steam = null, bool connected = false) =>
+        new([
+            new PlatformReport(Platforms.Instagram, instagram, "@me", Connected: connected),
+            new PlatformReport(Platforms.Facebook, []),
+            new PlatformReport(Platforms.Steam, steam ?? []),
+        ], ReportBuilder.HomeView, NextRunAt: null, Now);
 
     [Fact]
-    public void Embeds_the_data_and_the_diff()
+    public void Embeds_every_platforms_data_and_diff()
     {
-        var html = ReportBuilder.Render(Context([
-            DiffTests.Snap(1, followers: ["ann", "ben"], following: ["ben"]),
-            DiffTests.Snap(2, followers: ["ben", "dan"], following: ["ben", "cat"]),
-        ]));
+        var html = ReportBuilder.Render(Context(
+            [
+                DiffTests.Snap(1, followers: ["ann", "ben"], following: ["ben"]),
+                DiffTests.Snap(2, followers: ["ben", "dan"], following: ["ben", "cat"]),
+            ],
+            steam: [DiffTests.Friends(1, ["7656"]), DiffTests.Friends(2, [])]));
 
         Assert.DoesNotContain("__REPORT_DATA__", html);
+        Assert.Contains("\"view\":\"home\"", html);
         Assert.Contains("\"notFollowingBack\":[\"cat\"]", html);
         Assert.Contains("\"kind\":\"unfollowedYou\",\"username\":\"ann\"", html);
         Assert.Contains("\"kind\":\"followedYou\",\"username\":\"dan\"", html);
+        Assert.Contains("\"kind\":\"friendRemoved\",\"username\":\"7656\"", html);
+        Assert.Contains("\"id\":\"facebook\"", html);
     }
 
     [Fact]
-    public void Refresh_is_offered_only_with_a_session()
+    public void Refresh_is_offered_only_when_a_platform_is_connected()
     {
         var context = Context([DiffTests.Snap(1, [], [])]) with { FormToken = "tok", Running = "Fetch" };
-
         Assert.DoesNotContain("\"refresh\":", ReportBuilder.Render(context));
-        Assert.Contains("\"refresh\":{\"running\":\"Fetch\",\"token\":\"tok\"}", ReportBuilder.Render(context with { HasSession = true }));
+
+        var connected = Context([DiffTests.Snap(1, [], [])], connected: true) with { FormToken = "tok", Running = "Fetch" };
+        Assert.Contains("\"refresh\":{\"running\":\"Fetch\",\"token\":\"tok\"}", ReportBuilder.Render(connected));
     }
 
     [Fact]
@@ -43,11 +53,11 @@ public class ReportTests
     [Fact]
     public void Failed_fetch_shows_a_warning_with_the_last_good_date()
     {
-        var context = Context([DiffTests.Snap(1, [], [])], hasSession: true,
-            lastFetch: new RunSummary(Now, false, "Instagram rejected the session (login_required)."),
-            lastOk: new RunSummary(Now.AddDays(-2), true, "ok"));
+        var report = new PlatformReport(Platforms.Instagram, [DiffTests.Snap(1, [], [])], Connected: true,
+            LastFetch: new RunSummary(Now, false, "Instagram rejected the session (login_required)."),
+            LastOkFetch: new RunSummary(Now.AddDays(-2), true, "ok"));
 
-        var w = Assert.Single(ReportBuilder.Warnings(context.Snapshots[^1], context));
+        var w = Assert.Single(ReportBuilder.Warnings(report, Now));
 
         Assert.Equal("error", w.Level);
         Assert.Contains("login_required", w.Detail);
@@ -55,13 +65,23 @@ public class ReportTests
     }
 
     [Fact]
-    public void Stale_data_is_flagged()
+    public void Stale_data_is_flagged_sooner_when_fetched_than_when_exported()
     {
-        var context = Context([DiffTests.Snap(1, [], [])] /* Oct 1, Now is Oct 2 */);
-        Assert.Empty(ReportBuilder.Warnings(context.Snapshots[^1], context));
+        var fetched = new PlatformReport(Platforms.Steam, [DiffTests.Friends(1, [])] /* Oct 1, Now is Oct 2 */, Connected: true);
+        Assert.Empty(ReportBuilder.Warnings(fetched, Now));
+        Assert.Equal("warn", Assert.Single(ReportBuilder.Warnings(fetched, Now.AddDays(5))).Level);
 
-        var old = context with { Now = Now.AddDays(5) };
-        Assert.Equal("warn", Assert.Single(ReportBuilder.Warnings(old.Snapshots[^1], old)).Level);
+        var exported = new PlatformReport(Platforms.Facebook, [DiffTests.Friends(1, [], Platforms.Facebook)]);
+        Assert.Empty(ReportBuilder.Warnings(exported, Now.AddDays(5)));
+        Assert.Equal("info", Assert.Single(ReportBuilder.Warnings(exported, Now.AddDays(40))).Level);
+    }
+
+    [Fact]
+    public void A_platform_without_data_or_credentials_says_how_to_set_it_up()
+    {
+        var w = Assert.Single(ReportBuilder.Warnings(new PlatformReport(Platforms.Steam, []), Now));
+        Assert.Equal("Not set up", w.Title);
+        Assert.Contains("Web API key", w.Detail);
     }
 }
 

@@ -107,6 +107,11 @@ namespace ConnectionTracker.Web.Data.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("ok");
 
+                    b.Property<string>("Platform")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("platform");
+
                     b.HasKey("Id")
                         .HasName("pk_runs");
 
@@ -150,6 +155,12 @@ namespace ConnectionTracker.Web.Data.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("following_expected");
 
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("platform");
+
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -167,8 +178,8 @@ namespace ConnectionTracker.Web.Data.Migrations
                     b.HasKey("Id")
                         .HasName("pk_snapshots");
 
-                    b.HasIndex("TakenAt")
-                        .HasDatabaseName("ix_snapshots_taken_at");
+                    b.HasIndex("Platform", "TakenAt")
+                        .HasDatabaseName("ix_snapshots_platform_taken_at");
 
                     b.ToTable("snapshots", (string)null);
                 });

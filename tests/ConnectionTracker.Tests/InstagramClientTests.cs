@@ -45,7 +45,7 @@ public class InstagramClientTests
             Json("""{"users": [{"pk": 2, "username": "ben", "full_name": ""}], "status": "ok"}"""));
         var delays = new List<TimeSpan>();
 
-        var people = await Client(handler, delays).GetListAsync(FollowList.Followers);
+        var people = await Client(handler, delays).GetListAsync(ConnectionList.Followers);
 
         Assert.Equal([new Person("ann", "Ann A", "1"), new Person("ben", null, "2")], people);
         Assert.Equal("/api/v1/friendships/12345/followers/?count=50&search_surface=follow_list_page", handler.Requests[0].RequestUri!.PathAndQuery);
@@ -73,14 +73,14 @@ public class InstagramClientTests
     public async Task Rejected_session_is_reported(string body, HttpStatusCode status)
     {
         var handler = new FakeHandler(Json(body, status));
-        await Assert.ThrowsAsync<SessionExpiredException>(() => Client(handler).GetListAsync(FollowList.Following));
+        await Assert.ThrowsAsync<SessionExpiredException>(() => Client(handler).GetListAsync(ConnectionList.Following));
     }
 
     [Fact]
     public async Task Rate_limiting_stops_the_fetch()
     {
         var handler = new FakeHandler(Json("""{"message": "Please wait a few minutes before you try again.", "spam": true, "status": "fail"}""", HttpStatusCode.BadRequest));
-        await Assert.ThrowsAsync<RateLimitedException>(() => Client(handler).GetListAsync(FollowList.Following));
+        await Assert.ThrowsAsync<RateLimitedException>(() => Client(handler).GetListAsync(ConnectionList.Following));
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class InstagramClientTests
             Json("""{"users": [{"pk": 1, "username": "ann"}], "status": "ok"}"""),
             Json("""{"users": [{"pk": 1, "username": "ann"}], "status": "ok"}"""));
 
-        var e = await Assert.ThrowsAsync<IncompleteFetchException>(() => SnapshotFetcher.FetchAsync(Client(handler), null, NullLogger.Instance));
+        var e = await Assert.ThrowsAsync<IncompleteFetchException>(() => InstagramFetcher.FetchAsync(Client(handler), null, NullLogger.Instance));
         Assert.Contains("profile says 100", e.Message);
     }
 
@@ -103,7 +103,7 @@ public class InstagramClientTests
             Json("""{"users": [{"pk": 1, "username": "ann"}, {"pk": 2, "username": "ben"}], "status": "ok"}"""),
             Json("""{"users": [{"pk": 2, "username": "ben"}], "status": "ok"}"""));
 
-        var snap = await SnapshotFetcher.FetchAsync(Client(handler), null, NullLogger.Instance);
+        var snap = await InstagramFetcher.FetchAsync(Client(handler), null, NullLogger.Instance);
 
         Assert.Equal(SnapshotSource.Fetch, snap.Source);
         Assert.Equal(2, snap.Followers.Count);
@@ -113,8 +113,8 @@ public class InstagramClientTests
     [Fact]
     public void Small_shortfalls_are_tolerated_but_an_empty_list_is_not()
     {
-        SnapshotFetcher.Check("followers", got: 97, expected: 100, previousCount: 98); // deactivated accounts
-        SnapshotFetcher.Check("followers", got: 2, expected: 5, previousCount: null); // within 3
-        Assert.Throws<IncompleteFetchException>(() => SnapshotFetcher.Check("following", got: 0, expected: null, previousCount: 50));
+        FetchGuard.Check("followers", got: 97, expected: 100, previousCount: 98); // deactivated accounts
+        FetchGuard.Check("followers", got: 2, expected: 5, previousCount: null); // within 3
+        Assert.Throws<IncompleteFetchException>(() => FetchGuard.Check("following", got: 0, expected: null, previousCount: 50));
     }
 }

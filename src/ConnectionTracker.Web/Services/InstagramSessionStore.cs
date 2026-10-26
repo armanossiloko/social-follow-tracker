@@ -19,7 +19,7 @@ public sealed record SessionInfo(
 /// The Instagram session cookie and what we know about it, kept in the settings table. The cookie is encrypted
 /// with ASP.NET Core Data Protection; its keys live on a separate volume, so a database dump alone can't reveal it.
 /// </summary>
-public sealed class SessionStore(TrackerDb db, IDataProtectionProvider protection)
+public sealed class InstagramSessionStore(TrackerDb db, IDataProtectionProvider protection)
 {
     private const string UsernameKey = "instagram.username";
     private const string SessionKey = "instagram.session";
@@ -28,6 +28,7 @@ public sealed class SessionStore(TrackerDb db, IDataProtectionProvider protectio
     private const string SourceKey = "instagram.session_source";
     private const string ExtensionSeenKey = "extension.last_seen";
 
+    // The purpose string predates the rename; changing it would make stored cookies unreadable.
     private IDataProtector Protector => protection.CreateProtector("Following.InstagramSession.v1");
 
     public async Task<string?> GetUsernameAsync(CancellationToken ct) => await Get(UsernameKey, ct);
@@ -71,16 +72,10 @@ public sealed class SessionStore(TrackerDb db, IDataProtectionProvider protectio
         await db.Settings.Where(s => s.Key == SessionKey || s.Key == UpdatedAtKey || s.Key == SourceKey).ExecuteDeleteAsync(ct);
     }
 
-    private async Task<string?> Get(string key, CancellationToken ct) =>
-        (await db.Settings.AsNoTracking().FirstOrDefaultAsync(s => s.Key == key, ct))?.Value;
+    private Task<string?> Get(string key, CancellationToken ct) => db.GetSettingAsync(key, ct);
 
-    private async Task Set(string key, string value, CancellationToken ct)
-    {
-        var row = await db.Settings.FindAsync([key], ct);
-        if (row is null) db.Settings.Add(new SettingRow { Key = key, Value = value });
-        else row.Value = value;
-    }
+    private Task Set(string key, string value, CancellationToken ct) => db.SetSettingAsync(key, value, ct);
 
-    private static DateTimeOffset? Time(string? value) =>
+    internal static DateTimeOffset? Time(string? value) =>
         DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var t) ? t : null;
 }
