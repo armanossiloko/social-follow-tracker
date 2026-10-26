@@ -1,4 +1,4 @@
-name: following
+name: social-follow-tracker
 
 services:
   db:
