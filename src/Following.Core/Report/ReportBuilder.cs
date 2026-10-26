@@ -57,7 +57,6 @@ public static class ReportBuilder
         var latest = snapshots.Count > 0 ? snapshots[^1] : null;
         var history = Diff.BuildHistory(snapshots);
         var relationships = latest is null ? new Relationships([], [], []) : Diff.Relate(latest);
-        var lastChanges = snapshots.Count > 1 ? Diff.Changes(snapshots[^2], latest!) : [];
 
         // Names come from fetches only (exports don't include them); keep the most recent known one.
         var names = new Dictionary<string, string>();
@@ -100,7 +99,6 @@ public static class ReportBuilder
                 latest.FollowingExpected,
             },
             PreviousAt = snapshots.Count > 1 ? snapshots[^2].TakenAt : (DateTimeOffset?)null,
-            LastChanges = Count(lastChanges),
             Warnings = Warnings(latest, context),
             Lists = relationships,
             People = people,
@@ -119,9 +117,6 @@ public static class ReportBuilder
     }
 
     private static object? SinceDto(Since? since) => since is null ? null : new { since.At, since.Exact, since.AtOrBefore };
-
-    private static Dictionary<string, int> Count(List<FollowEvent> events) =>
-        Enum.GetValues<EventKind>().ToDictionary(KindName, kind => events.Count(e => e.Kind == kind));
 
     private static string KindName(EventKind kind) => JsonNamingPolicy.CamelCase.ConvertName(kind.ToString());
 

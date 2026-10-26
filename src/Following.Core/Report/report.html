@@ -29,6 +29,8 @@
     background: var(--subtle); color: var(--fg); font: inherit; cursor: pointer;
   }
   .actions button:disabled { color: var(--muted); cursor: default; }
+  button.link { margin-left: 4px; padding: 0; border: 0; background: none; color: var(--link); font: inherit; cursor: pointer; }
+  button.link:hover { text-decoration: underline; }
   .muted { color: var(--muted); }
   .red { color: var(--red); }
   .green { color: var(--green); }
@@ -96,7 +98,6 @@
   const link = (u) => `<a href="https://www.instagram.com/${encodeURIComponent(u)}/" target="_blank" rel="noopener noreferrer">@${esc(u)}</a>`;
 
   const { latest, lists, people, events } = data;
-  const lc = data.lastChanges;
 
   // ---------- header ----------
   $("account").textContent = data.account ? `@${data.account}` : "";
@@ -141,18 +142,40 @@
   }
 
   // ---------- summary ----------
-  if (latest && data.previousAt) {
+  // Changes since you last cleared them (remembered in this browser), else since the snapshot before the latest.
+  const seenKey = `following.seen.${data.account ?? ""}`;
+  const seen = localStorage.getItem(seenKey);
+  let sinceAt = latest && seen && new Date(seen) <= new Date(latest.takenAt) ? seen : data.previousAt;
+  const isNew = (e) => !!sinceAt && new Date(e.at) > new Date(sinceAt);
+
+  function renderSummary() {
+    if (!latest) return;
+    if (!sinceAt) {
+      $("summary").textContent = "First snapshot. Changes show up after the next one.";
+      return;
+    }
+    const fresh = events.filter(isNew);
+    const count = (...kinds) => fresh.filter((e) => kinds.includes(e.kind)).length;
+    const followers = count("followedYou");
     const parts = [
-      [lc.unfollowedYou + lc.vanished, "unfollowed you", "red"],
-      [lc.leftYourFollowing, "gone from your following", "red"],
-      [lc.followedYou, lc.followedYou === 1 ? "new follower" : "new followers", "green"],
-      [lc.youFollowed, "you followed", ""],
-      [lc.renamed, "renamed", ""],
+      [count("unfollowedYou", "vanished"), "unfollowed you", "red"],
+      [count("leftYourFollowing"), "gone from your following", "red"],
+      [followers, followers === 1 ? "new follower" : "new followers", "green"],
+      [count("youFollowed"), "you followed", ""],
+      [count("renamed"), "renamed", ""],
     ].filter(([n]) => n > 0).map(([n, label, cls]) => `<span class="${cls}">${nf.format(n)} ${label}</span>`);
-    $("summary").innerHTML = `Since ${esc(day(data.previousAt))}: ` + (parts.length ? parts.join(", ") + "." : "no changes.");
-  } else if (latest) {
-    $("summary").textContent = "First snapshot. Changes show up after the next one.";
+    $("summary").innerHTML = `Since ${esc(day(sinceAt))}: ` + (parts.length
+      ? parts.join(", ") + `. <button type="button" class="link" id="clear" title="Hide these until something else changes">Clear</button>`
+      : "no changes.");
   }
+  renderSummary();
+  $("summary").addEventListener("click", (e) => {
+    if (!e.target.closest("#clear")) return;
+    localStorage.setItem(seenKey, latest.takenAt);
+    sinceAt = latest.takenAt;
+    renderSummary();
+    render();
+  });
 
   if (latest) {
     $("stats").innerHTML = [
@@ -205,10 +228,8 @@
       empty: data.snapshotCount < 2 ? "Shows up after the second snapshot." : "Nobody so far.",
       rows: (q) => sortEvents(losses.filter((e) => match(e.username, q))),
       head: ["Who", "What happened", "When", "Now"],
-      row: (e) => {
-        const isNew = latest && e.at === latest.takenAt;
-        return [link(e.username) + (isNew ? `<span class="badge">new</span>` : ""), esc(LOSSES[e.kind]), esc(whenText(e)), nowText(e, people[e.username] ?? {})];
-      },
+      row: (e) => [link(e.username) + (isNew(e) ? `<span class="badge">new</span>` : ""),
+        esc(LOSSES[e.kind]), esc(whenText(e)), nowText(e, people[e.username] ?? {})],
     },
     {
       id: "notFollowingBack", label: "Not following you back", count: lists.notFollowingBack.length,

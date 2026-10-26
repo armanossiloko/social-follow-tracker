@@ -15,6 +15,8 @@ Each run compares the new snapshot with the previous one, so something that happ
 
 Someone who drops off only *your* following list appears in History as "gone from your following", not in this tab. Usually you unfollowed them; if you didn't, they removed you as a follower. Your own lists can't tell these apart.
 
+The summary at the top counts the changes since you last pressed **Clear** next to it (or, before that, since the previous snapshot), so a change stays visible until you've seen it, however many runs happen in between. Clearing is remembered per browser.
+
 Each entry shows when it happened (between which two snapshots), how long the follow had lasted, and where things stand now: *follows you again*, *you still follow them*. Renamed accounts are matched by Instagram's account id (in fetched data), so a rename shows as "renamed from @old" rather than a fake unfollow.
 
 ## Setup
