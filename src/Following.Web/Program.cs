@@ -55,17 +55,13 @@ app.Use(async (http, next) =>
 
 // Every state-changing endpoint checks the form token. The built-in middleware only checks requests that carry
 // form data, which would let another site trigger a bodiless POST (Fetch now, Remove cookie) from your browser.
-var forms = app.MapGroup("/settings").AddEndpointFilter(async (context, next) =>
-{
-    var antiforgery = context.HttpContext.RequestServices.GetRequiredService<IAntiforgery>();
-    return await antiforgery.IsRequestValidAsync(context.HttpContext)
-        ? await next(context)
-        : Results.BadRequest("Missing or invalid form token. Reload the Settings page and try again.");
-});
+var forms = app.MapGroup("/settings").AddEndpointFilter(RequireFormToken);
 
 app.MapGet("/healthz", () => Results.Text("ok"));
 
-app.MapGet("/", async (SnapshotRepository repo, SessionStore session, SchedulerState scheduler, TimeProvider clock, CancellationToken ct) =>
+app.MapGet("/", async (
+    HttpContext http, IAntiforgery antiforgery, SnapshotRepository repo, SessionStore session,
+    JobRunner runner, SchedulerState scheduler, TimeProvider clock, CancellationToken ct) =>
 {
     var context = new ReportContext(
         await repo.LoadAllAsync(ct),
@@ -74,9 +70,23 @@ app.MapGet("/", async (SnapshotRepository repo, SessionStore session, SchedulerS
         SnapshotRepository.Summary(await repo.LastRunAsync(RunKind.Fetch, okOnly: false, ct)),
         SnapshotRepository.Summary(await repo.LastRunAsync(RunKind.Fetch, okOnly: true, ct)),
         scheduler.NextRunAt,
-        clock.GetUtcNow());
+        clock.GetUtcNow(),
+        runner.Running,
+        antiforgery.GetAndStoreTokens(http).RequestToken);
     return Results.Content(ReportBuilder.Render(context), "text/html; charset=utf-8");
 });
+
+// The report's Refresh button: starts a fetch, then polls GET /refresh and reloads once nothing is running.
+app.MapPost("/refresh", async (JobRunner runner, SessionStore session, CancellationToken ct) =>
+{
+    if (!await session.HasSessionAsync(ct))
+        return Results.Json(new { error = "Store a session cookie on the Settings page first." }, statusCode: StatusCodes.Status400BadRequest);
+    // If another job is already running (e.g. the daily run), the page just waits for that one instead.
+    runner.TryStart("Fetch", (jobs, c) => jobs.FetchAsync(c));
+    return Results.Json(new { running = runner.Running });
+}).AddEndpointFilter(RequireFormToken);
+
+app.MapGet("/refresh", (JobRunner runner) => Results.Json(new { running = runner.Running }));
 
 app.MapGet("/settings", async (
     HttpContext http, IAntiforgery antiforgery, SnapshotRepository repo, SessionStore session,
@@ -148,6 +158,14 @@ forms.MapPost("/import", async (HttpContext http, IFormFile file, JobRunner runn
 });
 
 app.Run();
+
+static async ValueTask<object?> RequireFormToken(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+{
+    var antiforgery = context.HttpContext.RequestServices.GetRequiredService<IAntiforgery>();
+    return await antiforgery.IsRequestValidAsync(context.HttpContext)
+        ? await next(context)
+        : Results.BadRequest("Missing or invalid form token. Reload the page and try again.");
+}
 
 static IResult Back(HttpContext http, string? msg = null, string? error = null)
 {

@@ -10,6 +10,8 @@ public sealed record ReportWarning(string Level, string Title, string Detail);
 public sealed record RunSummary(DateTimeOffset At, bool Ok, string Message);
 
 /// <summary>Everything the report page needs besides the snapshots themselves.</summary>
+/// <param name="Running">The job in progress (fetch, import, daily run), if any.</param>
+/// <param name="FormToken">Request token the page sends with its Refresh request.</param>
 public sealed record ReportContext(
     IReadOnlyList<Snapshot> Snapshots,
     string? Account,
@@ -17,7 +19,9 @@ public sealed record ReportContext(
     RunSummary? LastFetch,
     RunSummary? LastOkFetch,
     DateTimeOffset? NextRunAt,
-    DateTimeOffset Now);
+    DateTimeOffset Now,
+    string? Running = null,
+    string? FormToken = null);
 
 /// <summary>Renders the report page: the HTML template with all data embedded as JSON.</summary>
 public static class ReportBuilder
@@ -81,6 +85,8 @@ public static class ReportBuilder
             GeneratedAt = context.Now,
             context.Account,
             context.NextRunAt,
+            // Only offered when there's a session cookie to fetch with.
+            Refresh = context.HasSession ? new { context.Running, Token = context.FormToken } : null,
             SnapshotCount = snapshots.Count,
             FirstSnapshotAt = snapshots.Count > 0 ? snapshots[0].TakenAt : (DateTimeOffset?)null,
             Latest = latest is null ? null : new
@@ -125,7 +131,7 @@ public static class ReportBuilder
         if (context.HasSession && context.LastFetch is { Ok: false } failed)
         {
             var since = context.LastOkFetch is { } ok ? $"Last successful fetch: {ok.At:yyyy-MM-dd}." : "No fetch has succeeded yet.";
-            warnings.Add(new("error", "The daily fetch failed", $"{failed.Message} {since}"));
+            warnings.Add(new("error", "The last fetch failed", $"{failed.Message} {since}"));
         }
         if (latest is null)
         {

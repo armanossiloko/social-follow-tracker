@@ -25,6 +25,15 @@ public class ReportTests
     }
 
     [Fact]
+    public void Refresh_is_offered_only_with_a_session()
+    {
+        var context = Context([DiffTests.Snap(1, [], [])]) with { FormToken = "tok", Running = "Fetch" };
+
+        Assert.DoesNotContain("\"refresh\":", ReportBuilder.Render(context));
+        Assert.Contains("\"refresh\":{\"running\":\"Fetch\",\"token\":\"tok\"}", ReportBuilder.Render(context with { HasSession = true }));
+    }
+
+    [Fact]
     public void Embedded_data_cannot_break_out_of_the_script_tag()
     {
         var html = ReportBuilder.Render(new { Name = "</script><script>alert(1)</script>" });

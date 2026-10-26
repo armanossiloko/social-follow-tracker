@@ -23,6 +23,12 @@
   a:hover { text-decoration: underline; }
   header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
   h1 { margin: 0; font-size: 22px; }
+  .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 4px 12px; }
+  .actions button {
+    padding: 3px 12px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--subtle); color: var(--fg); font: inherit; cursor: pointer;
+  }
+  .actions button:disabled { color: var(--muted); cursor: default; }
   .muted { color: var(--muted); }
   .red { color: var(--red); }
   .green { color: var(--green); }
@@ -59,7 +65,11 @@
 <main>
   <header>
     <h1>Following <span class="muted" id="account"></span></h1>
-    <a href="settings">Settings</a>
+    <div class="actions">
+      <span class="muted" id="refresh-status" role="status"></span>
+      <button type="button" id="refresh" hidden>Refresh</button>
+      <a href="settings">Settings</a>
+    </div>
   </header>
   <div class="muted" id="updated"></div>
   <div id="notices"></div>
@@ -96,6 +106,39 @@
 
   $("notices").innerHTML = data.warnings.map((w) =>
     `<div class="notice ${esc(w.level)}"><b>${esc(w.title)}.</b> ${esc(w.detail)}</div>`).join("");
+
+  // ---------- refresh ----------
+  // Starts a fetch (or waits for whichever job is already running), then reloads to show the new snapshot.
+  if (data.refresh) {
+    const button = $("refresh"), status = $("refresh-status");
+    const wait = (running) => {
+      button.disabled = true;
+      status.className = "muted";
+      status.textContent = running === "Fetch" ? "Fetching, this takes a minute or two…" : `${running} in progress…`;
+      const poll = setInterval(async () => {
+        try {
+          const r = await fetch("refresh", { cache: "no-store" });
+          if (r.ok && !(await r.json()).running) { clearInterval(poll); location.reload(); }
+        } catch { /* server briefly unreachable; try again on the next tick */ }
+      }, 3000);
+    };
+    button.hidden = false;
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      status.textContent = "";
+      try {
+        const r = await fetch("refresh", { method: "POST", headers: { RequestVerificationToken: data.refresh.token } });
+        const body = await r.json().catch(() => null);
+        if (!r.ok) throw new Error((typeof body === "string" ? body : body?.error) ?? `The server answered ${r.status}.`);
+        body?.running ? wait(body.running) : location.reload();
+      } catch (e) {
+        status.className = "red";
+        status.textContent = e.message;
+        button.disabled = false;
+      }
+    });
+    if (data.refresh.running) wait(data.refresh.running);
+  }
 
   // ---------- summary ----------
   if (latest && data.previousAt) {

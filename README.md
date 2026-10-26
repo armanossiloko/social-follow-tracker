@@ -49,7 +49,7 @@ Both containers use `restart: unless-stopped`, so they come back whenever Docker
 
 ## How data gets in
 
-1. **Automatic daily fetch.** At `DAILY_AT` (in the `TZ` time zone, plus up to 30 minutes of random delay), the app reads your lists through the endpoints instagram.com itself uses: one page of 50 at a time, with 2.5–6 s pauses. It stops at the first sign of trouble (expired session, checkpoint, rate limit). **Fetch now** on the Settings page runs one immediately.
+1. **Automatic daily fetch.** At `DAILY_AT` (in the `TZ` time zone, plus up to 30 minutes of random delay), the app reads your lists through the endpoints instagram.com itself uses: one page of 50 at a time, with 2.5–6 s pauses. It stops at the first sign of trouble (expired session, checkpoint, rate limit). **Refresh** on the report (or **Fetch now** on the Settings page) runs one immediately; the report reloads when it finishes.
    > ⚠️ This is unofficial and against Instagram's Terms of Use. Running it from your own PC keeps the requests on your home IP, the same as your browser. At under 1,000 accounts it's about 20 requests a day, which is low risk but not zero: Instagram can log the session out or ask you to confirm it's you. Logging in again on instagram.com in your browser fixes it; the extension passes the new session on.
 2. **Official export.** In the Instagram app go to *Accounts Center → Your information and permissions → Download your information*. Choose *Some of your information → Followers and following*, format **JSON**. Either upload the zip on the Settings page, or let it land in `EXPORTS_DIR` (mounted read-only); every `instagram-*.zip` there is imported on the next daily run. Exports include the exact date each follow happened.
 
