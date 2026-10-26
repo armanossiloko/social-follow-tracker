@@ -6,15 +6,16 @@ A daily report of your Instagram followers and following. It shows who doesn't f
 
 ## Who unfollowed you
 
-Each run compares the new snapshot with the previous one, so something that happened yesterday is in today's report. The report opens on **History** (every change, newest first). The **Unfollowed you** tab lists just the losses and labels each case with what the data can actually show:
+Each run compares the new snapshot with the previous one, so something that happened yesterday is in today's report. The report opens on **History** (every change, newest first). The **Unfollowed you** tab lists just the people who stopped following you, labelled with what the data can actually show:
 
 | You see | It means |
 |---|---|
 | **Unfollowed you** | They dropped off your followers list. |
-| **Gone from your following** | They dropped off *your* following list. Either you unfollowed them or, if you didn't, they removed you as a follower. Your own lists can't tell these apart. |
-| **Gone from both lists** | They blocked you, or deactivated or deleted their account. |
+| **Blocked you, or deactivated their account** | They dropped off both your lists at once: they blocked you, or deactivated or deleted their account. |
 
-Each entry shows when it happened (between which two snapshots), how long the follow had lasted, and where things stand now: *you still follow them*, *followed you again*, *still follows you*. Renamed accounts are matched by Instagram's account id (in fetched data), so a rename shows as "renamed from @old" rather than a fake unfollow.
+Someone who drops off only *your* following list appears in History as "gone from your following", not in this tab. Usually you unfollowed them; if you didn't, they removed you as a follower. Your own lists can't tell these apart.
+
+Each entry shows when it happened (between which two snapshots), how long the follow had lasted, and where things stand now: *follows you again*, *you still follow them*. Renamed accounts are matched by Instagram's account id (in fetched data), so a rename shows as "renamed from @old" rather than a fake unfollow.
 
 ## Setup
 

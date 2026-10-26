@@ -165,9 +165,10 @@
   }
 
   // ---------- tabs ----------
+  // Only people who stopped following you. Someone gone from your own following list (usually because you
+  // unfollowed them) shows up in History instead.
   const LOSSES = {
     unfollowedYou: "Unfollowed you",
-    leftYourFollowing: "Removed you, or you unfollowed them",
     vanished: "Blocked you, or deactivated their account",
   };
   const HISTORY = {
@@ -186,7 +187,6 @@
     : `${new Date(e.after).toLocaleDateString(undefined, { day: "numeric", month: "short" })} – ${day(e.at)}`;
   const nowText = (e, p) => {
     if (e.kind === "unfollowedYou") return p.followsYou ? `<span class="green">Follows you again</span>` : p.youFollow ? `<span class="red">You still follow them</span>` : "";
-    if (e.kind === "leftYourFollowing") return p.youFollow ? "You follow them again" : p.followsYou ? "Still follows you" : "";
     return p.followsYou || p.youFollow ? "Back" : "";
   };
   const match = (u, q) => !q || u.includes(q) || (people[u]?.name ?? "").toLowerCase().includes(q);
