@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Social Connection Tracker</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --fg: #1f2328; --muted: #656d76; --border: #d0d7de; --bg: #ffffff; --subtle: #f6f8fa;
+    --link: #0969da; --red: #cf222e; --green: #1a7f37; --warn: #fff8c5; --error: #ffebe9;
+    --instagram: #d62976; --facebook: #1877f2; --steam: #2a475e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #e6edf3; --muted: #8d96a0; --border: #30363d; --bg: #0d1117; --subtle: #161b22;
+      --link: #4493f8; --red: #f85149; --green: #3fb950; --warn: #3b2e00; --error: #3c1618;
+      --instagram: #f0569b; --facebook: #4599ff; --steam: #66c0f4;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  h1 { margin: 0; font-size: 22px; }
+  h1 a { color: inherit; }
+  .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 4px 12px; }
+  .actions button {
+    padding: 3px 12px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--subtle); color: var(--fg); font: inherit; cursor: pointer;
+  }
+  .actions button:disabled { color: var(--muted); cursor: default; }
+  button.link { margin-left: 4px; padding: 0; border: 0; background: none; color: var(--link); font: inherit; cursor: pointer; }
+  button.link:hover { text-decoration: underline; }
+  .muted { color: var(--muted); }
+  .red { color: var(--red); }
+  .green { color: var(--green); }
+
+  .views { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0 0; }
+  .views a {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px;
+    border: 1px solid var(--border); border-radius: 999px; color: var(--fg);
+  }
+  .views a:hover { text-decoration: none; background: var(--subtle); }
+  .views a.off { color: var(--muted); }
+  .views a[aria-current="page"] { border-color: var(--fg); font-weight: 600; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--muted)); flex: none; }
+  .pf-instagram { --c: var(--instagram); }
+  .pf-facebook { --c: var(--facebook); }
+  .pf-steam { --c: var(--steam); }
+  .pf { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+  .updated { margin-top: 12px; }
+  .notice { margin: 16px 0 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--warn); }
+  .notice.error { background: var(--error); }
+  .notice.info { background: var(--subtle); }
+  .summary { margin: 16px 0 0; font-size: 16px; }
+  .summary:empty { display: none; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 16px; }
+  .cards:empty { display: none; }
+  .card {
+    display: block; padding: 12px 14px; border: 1px solid var(--border); border-top: 3px solid var(--c);
+    border-radius: 8px; color: var(--fg);
+  }
+  .card:hover { text-decoration: none; background: var(--subtle); }
+  .card.off { border-top-color: var(--border); }
+  .card h2 { display: flex; align-items: baseline; gap: 6px; margin: 0; font-size: 16px; }
+  .card h2 .muted { overflow: hidden; font-size: 14px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+  .card .big { margin-top: 6px; font-size: 14px; }
+  .card .big b { font-size: 20px; font-weight: 600; }
+  .card p { margin: 6px 0 0; font-size: 14px; }
+
+  .stats { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 16px 0 0; }
+  .stats div { color: var(--muted); font-size: 13px; }
+  .stats b { display: block; color: var(--fg); font-size: 22px; font-weight: 600; }
+  .tabs { display: flex; flex-wrap: wrap; margin-top: 24px; border-bottom: 1px solid var(--border); }
+  .tabs button {
+    margin-bottom: -1px; padding: 8px 12px; border: 0; border-bottom: 2px solid transparent;
+    background: none; color: var(--muted); font: inherit; cursor: pointer;
+  }
+  .tabs button:hover { color: var(--fg); }
+  .tabs button[aria-selected="true"] { color: var(--fg); font-weight: 600; border-bottom-color: var(--link); }
+  .count { margin-left: 4px; padding: 0 7px; border-radius: 10px; background: var(--subtle); font-size: 12px; font-weight: 400; }
+  .toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin: 12px 0; }
+  .toolbar p { margin: 0; }
+  input[type="search"] {
+    width: 240px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--fg); font: inherit;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { color: var(--muted); font-size: 13px; font-weight: 600; }
+  .badge { margin-left: 6px; padding: 0 6px; border-radius: 8px; background: var(--red); color: #fff; font-size: 11px; }
+  .empty { padding: 24px 8px; color: var(--muted); }
+  footer { margin-top: 32px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1><a href="./">Social Connection Tracker</a></h1>
+    <div class="actions">
+      <span class="muted" id="refresh-status" role="status"></span>
+      <button type="button" id="refresh" hidden>Refresh</button>
+      <a href="settings">Settings</a>
+    </div>
+  </header>
+  <nav class="views" id="views" aria-label="Platforms"></nav>
+  <div class="muted updated" id="updated"></div>
+  <div id="notices"></div>
+  <p class="summary" id="summary"></p>
+  <div class="cards" id="cards"></div>
+  <div class="stats" id="stats"></div>
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+  <div class="toolbar">
+    <p class="muted" id="desc"></p>
+    <input type="search" id="q" placeholder="Search" aria-label="Search" autocomplete="off">
+  </div>
+  <div id="panel" role="tabpanel"></div>
+  <footer id="footer"></footer>
+</main>
+
+<script id="report-data" type="application/json">__REPORT_DATA__</script>
+<script>
+(() => {
+  const data = JSON.parse(document.getElementById("report-data").textContent);
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const nf = new Intl.NumberFormat();
+  const day = (iso) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  const dateTime = (iso) => new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const plural = (n, one, many) => `${nf.format(n)} ${n === 1 ? one : many}`;
+
+  const platforms = data.platforms;
+  const current = platforms.find((p) => p.id === data.view) ?? null; // null: the overview
+  // A platform is in use once it has data or credentials; the overview leaves the others out.
+  const active = platforms.filter((p) => p.latest || p.connected);
+
+  // ---------- per-platform state ----------
+  // "New" means since you last cleared the summary (remembered in this browser), else since the snapshot before the latest.
+  for (const p of platforms) {
+    p.seenKey = `sct.seen.${p.id}.${p.account ?? ""}`;
+    const seen = localStorage.getItem(p.seenKey);
+    p.sinceAt = p.latest && seen && new Date(seen) <= new Date(p.latest.takenAt) ? seen : p.previousAt;
+    for (const e of p.events) e.p = p;
+  }
+  const isNew = (e) => !!e.p.sinceAt && new Date(e.at) > new Date(e.p.sinceAt);
+  const fresh = (p) => p.events.filter(isNew);
+  const clear = (p) => { if (p.latest) { localStorage.setItem(p.seenKey, p.latest.takenAt); p.sinceAt = p.latest.takenAt; } };
+
+  const nameOf = (p, u) => p.people[u]?.name || u;
+  const external = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+  // Facebook exports carry names only, so there's nothing to link to.
+  const who = (p, u) =>
+    p.id === "instagram" ? external(`https://www.instagram.com/${encodeURIComponent(u)}/`, `@${esc(u)}`)
+    : p.id === "steam" ? external(`https://steamcommunity.com/profiles/${encodeURIComponent(u)}`, esc(nameOf(p, u)))
+    : esc(nameOf(p, u));
+  const tag = (p) => `<span class="pf pf-${esc(p.id)}"><span class="dot"></span>${esc(p.name)}</span>`;
+
+  // What changed since sinceAt, as a list of "<n> <label>" parts.
+  function changeParts(p) {
+    const list = fresh(p);
+    const count = (...kinds) => list.filter((e) => kinds.includes(e.kind)).length;
+    const parts = p.friends
+      ? [
+          [count("friendRemoved"), (n) => n === 1 ? "friend lost" : "friends lost", "red"],
+          [count("youRemovedFriend"), "removed by you", ""],
+          [count("becameFriends"), (n) => n === 1 ? "new friend" : "new friends", "green"],
+        ]
+      : [
+          [count("unfollowedYou", "vanished"), "unfollowed you", "red"],
+          [count("leftYourFollowing"), "gone from your following", "red"],
+          [count("followedYou"), (n) => n === 1 ? "new follower" : "new followers", "green"],
+          [count("youFollowed"), "you followed", ""],
+          [count("renamed"), "renamed", ""],
+        ];
+    return parts.filter(([n]) => n > 0)
+      .map(([n, label, cls]) => `<span class="${cls}">${nf.format(n)} ${typeof label === "function" ? label(n) : label}</span>`);
+  }
+
+  // ---------- header ----------
+  if (current) document.title = `${current.name} · Social Connection Tracker`;
+  $("views").innerHTML = [
+    `<a href="./"${current ? "" : ` aria-current="page"`}>Overview</a>`,
+    ...platforms.map((p) => `<a href="${esc(p.id)}" class="pf-${esc(p.id)}${active.includes(p) ? "" : " off"}"${p === current ? ` aria-current="page"` : ""}>` +
+      `<span class="dot"></span>${esc(p.name)}</a>`),
+  ].join("");
+
+  if (current) {
+    const account = current.account
+      ? (current.accountUrl ? external(current.accountUrl, esc(current.account)) : esc(current.account)) + " · "
+      : "";
+    $("updated").innerHTML = account + (current.latest
+      ? `Last snapshot ${esc(dateTime(current.latest.takenAt))} (${current.latest.source === "fetch" ? "fetched" : "from export"})`
+      : "No data yet");
+  }
+
+  // The overview repeats each platform's warnings, except "not set up" for platforms you don't use.
+  $("notices").innerHTML = (current ? [current] : active).flatMap((p) => p.warnings.map((w) =>
+    `<div class="notice ${esc(w.level)}"><b>${current ? "" : esc(p.name) + ": "}${esc(w.title)}.</b> ${esc(w.detail)}</div>`)).join("");
+
+  // ---------- refresh ----------
+  // Starts a fetch (or waits for whichever job is already running), then reloads to show the new snapshot.
+  // On a platform page it fetches just that platform; on the overview, every connected one.
+  if (data.refresh && (current ? current.connected : true)) {
+    const button = $("refresh"), status = $("refresh-status");
+    const url = current ? `refresh?platform=${encodeURIComponent(current.id)}` : "refresh";
+    const wait = (running) => {
+      button.disabled = true;
+      status.className = "muted";
+      status.textContent = `${running} in progress…`;
+      const poll = setInterval(async () => {
+        try {
+          const r = await fetch("refresh", { cache: "no-store" });
+          if (r.ok && !(await r.json()).running) { clearInterval(poll); location.reload(); }
+        } catch { /* server briefly unreachable; try again on the next tick */ }
+      }, 3000);
+    };
+    button.hidden = false;
+    button.title = current ? `Fetch ${current.name} now` : "Fetch every connected platform now";
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      status.textContent = "";
+      try {
+        const r = await fetch(url, { method: "POST", headers: { RequestVerificationToken: data.refresh.token } });
+        const body = await r.json().catch(() => null);
+        if (!r.ok) throw new Error((typeof body === "string" ? body : body?.error) ?? `The server answered ${r.status}.`);
+        body?.running ? wait(body.running) : location.reload();
+      } catch (e) {
+        status.className = "red";
+        status.textContent = e.message;
+        button.disabled = false;
+      }
+    });
+    if (data.refresh.running) wait(data.refresh.running);
+  }
+
+  // ---------- summary ----------
+  function renderSummary() {
+    const clearButton = `<button type="button" class="link" id="clear" title="Hide these until something else changes">Clear</button>`;
+    if (!current) {
+      if (!active.length) {
+        $("summary").innerHTML = `Nothing is tracked yet. Set up Instagram, Facebook or Steam on the <a href="settings">Settings</a> page.`;
+        return;
+      }
+      const n = active.reduce((sum, p) => sum + fresh(p).length, 0);
+      $("summary").innerHTML = n ? `${plural(n, "change", "changes")} since you last looked, marked <span class="badge">new</span> below. ${clearButton}` : "";
+      $("cards").innerHTML = platforms.map(card).join("");
+      return;
+    }
+    if (!current.latest) return;
+    if (!current.sinceAt) {
+      $("summary").textContent = "First snapshot. Changes show up after the next one.";
+      return;
+    }
+    const parts = changeParts(current);
+    $("summary").innerHTML = `Since ${esc(day(current.sinceAt))}: ` + (parts.length ? parts.join(", ") + ". " + clearButton : "no changes.");
+  }
+
+  // One card per platform on the overview, linking to its page.
+  function card(p) {
+    if (!active.includes(p))
+      return `<a class="card off pf-${esc(p.id)}" href="${esc(p.id)}"><h2><span class="dot"></span>${esc(p.name)}</h2>` +
+        `<p class="muted">Not set up yet.</p></a>`;
+    const big = !p.latest ? `<span class="muted">No data yet</span>`
+      : p.friends ? `<b>${nf.format(p.latest.friends)}</b> friends`
+      : `<b>${nf.format(p.latest.followers)}</b> followers · <b>${nf.format(p.latest.following)}</b> following`;
+    const parts = changeParts(p);
+    const changes = !p.latest ? ""
+      : !p.sinceAt ? `<p class="muted">First snapshot; changes show up after the next one.</p>`
+      : `<p>Since ${esc(day(p.sinceAt))}: ${parts.length ? parts.join(", ") : `<span class="muted">no changes</span>`}</p>`;
+    const failed = p.connected && p.warnings.some((w) => w.level === "error");
+    const status = failed ? `<span class="red">Last fetch failed</span>`
+      : p.latest ? `Updated ${esc(day(p.latest.takenAt))} · ${p.latest.source === "fetch" ? "fetched" : "from export"}`
+      : "";
+    return `<a class="card pf-${esc(p.id)}" href="${esc(p.id)}">` +
+      `<h2><span class="dot"></span>${esc(p.name)}${p.account ? ` <span class="muted">${esc(p.account)}</span>` : ""}</h2>` +
+      `<div class="big">${big}</div>${changes}${status ? `<p class="muted">${status}</p>` : ""}</a>`;
+  }
+
+  renderSummary();
+  $("summary").addEventListener("click", (e) => {
+    if (!e.target.closest("#clear")) return;
+    (current ? [current] : active).forEach(clear);
+    renderSummary();
+    render();
+  });
+
+  if (current?.latest) {
+    const lists = current.lists;
+    const losses = current.events.filter((e) => e.kind === "friendRemoved").length;
+    $("stats").innerHTML = (current.friends
+      ? [["Friends", current.latest.friends], ["No longer friends", losses]]
+      : [
+          ["Followers", current.latest.followers],
+          ["Following", current.latest.following],
+          ["Mutual", lists.mutual.length],
+          ["Not following you back", lists.notFollowingBack.length],
+          ["You don't follow back", lists.fans.length],
+        ]).map(([label, n]) => `<div><b>${nf.format(n)}</b>${label}</div>`).join("");
+  }
+
+  // ---------- tabs ----------
+  // Lost connections are only people who dropped you. Someone you dropped yourself (as far as the platform can
+  // tell) shows up in History instead.
+  const LOSSES = {
+    unfollowedYou: "Unfollowed you",
+    vanished: "Blocked you, or deactivated their account",
+    friendRemoved: "No longer friends",
+  };
+  const HISTORY = {
+    followedYou: "followed you",
+    unfollowedYou: "unfollowed you",
+    youFollowed: "you followed",
+    leftYourFollowing: "gone from your following",
+    vanished: "blocked you or deactivated",
+    renamed: "renamed",
+    becameFriends: "became friends",
+    friendRemoved: "no longer friends",
+    youRemovedFriend: "you removed them",
+  };
+  const change = (e) => e.kind === "renamed" ? `renamed from @${esc(e.previousUsername)}` : esc(HISTORY[e.kind]);
+  const isLoss = (e) => e.kind in LOSSES;
+  const newBadge = (e) => isNew(e) ? `<span class="badge">new</span>` : "";
+
+  const sinceText = (s) => !s ? "" : s.exact ? day(s.at) : s.atOrBefore ? `before ${day(s.at)}` : `~${day(s.at)}`;
+  const whenText = (e) => !e.after || new Date(e.after).toDateString() === new Date(e.at).toDateString()
+    ? day(e.at)
+    : `${new Date(e.after).toLocaleDateString(undefined, { day: "numeric", month: "short" })} – ${day(e.at)}`;
+  const nowText = (e) => {
+    const p = e.p.people[e.username] ?? {};
+    if (e.kind === "unfollowedYou") return p.followsYou ? `<span class="green">Follows you again</span>` : p.youFollow ? `<span class="red">You still follow them</span>` : "";
+    if (e.kind === "friendRemoved") return p.friend ? `<span class="green">Friends again</span>` : "";
+    return p.followsYou || p.youFollow ? "Back" : "";
+  };
+  const match = (p, u, q) => !q || u.includes(q) || (p.people[u]?.name ?? "").toLowerCase().includes(q);
+  const matchEvent = (e, q) => match(e.p, e.username, q) || (e.previousUsername ?? "").includes(q);
+
+  // Sort by display name (falling back to the username), A–Z with locale-aware accents; dated tabs go newest day first.
+  const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+  const byName = (p) => (a, b) => collator.compare(nameOf(p, a), nameOf(p, b)) || collator.compare(a, b);
+  const sortNames = (p, list) => [...list].sort(byName(p));
+  const dayStart = (iso) => new Date(iso).setHours(0, 0, 0, 0);
+  const sortEvents = (list) => [...list].sort((a, b) => dayStart(b.at) - dayStart(a.at)
+    || platforms.indexOf(a.p) - platforms.indexOf(b.p)
+    || collator.compare(nameOf(a.p, a.username), nameOf(b.p, b.username)));
+  const notYet = (ps) => ps.some((p) => p.snapshotCount >= 2) ? "Nobody so far." : "Shows up after the second snapshot.";
+
+  function overviewTabs() {
+    const events = active.flatMap((p) => p.events);
+    const losses = events.filter(isLoss);
+    return [
+      {
+        id: "lost", label: "Lost connections", count: losses.length,
+        desc: "People who unfollowed or unfriended you, on every platform. Found by comparing each snapshot with the one before it.",
+        empty: notYet(active),
+        rows: (q) => sortEvents(losses.filter((e) => matchEvent(e, q))),
+        head: ["Who", "Platform", "What happened", "When", "Now"],
+        row: (e) => [who(e.p, e.username) + newBadge(e), tag(e.p), esc(LOSSES[e.kind]), esc(whenText(e)), nowText(e)],
+      },
+      {
+        id: "history", label: "History", count: events.length,
+        desc: "Every change on every platform, newest day first.", empty: notYet(active),
+        rows: (q) => sortEvents(events.filter((e) => matchEvent(e, q))),
+        head: ["When", "Platform", "Who", "Change"],
+        row: (e) => [esc(day(e.at)), tag(e.p), who(e.p, e.username) + newBadge(e), change(e)],
+      },
+    ];
+  }
+
+  function friendTabs(p) {
+    const losses = p.events.filter(isLoss);
+    const friends = p.lists.friends ?? [];
+    return [
+      {
+        id: "lost", label: "No longer friends", count: losses.length,
+        desc: p.id === "facebook"
+          ? "Gone from your friends list: they unfriended you, or deactivated or deleted their account. People you removed yourself are in History."
+          : "Gone from your friends list: they removed you, you removed them, or the account is gone. Steam doesn't say which.",
+        empty: notYet([p]),
+        rows: (q) => sortEvents(losses.filter((e) => matchEvent(e, q))),
+        head: ["Who", "Friends since", "When", "Now"],
+        row: (e) => [who(p, e.username) + newBadge(e), esc(sinceText(e.followedSince)), esc(whenText(e)), nowText(e)],
+      },
+      {
+        id: "friends", label: "Friends", count: friends.length,
+        desc: "Your friends list as of the last snapshot.", empty: p.latest ? "No friends in the last snapshot." : "No data yet.",
+        rows: (q) => sortNames(p, friends.filter((u) => match(p, u, q))),
+        head: ["Who", "Friends since"],
+        row: (u) => [who(p, u), esc(sinceText(p.people[u]?.friendSince))],
+      },
+      historyTab(p),
+    ];
+  }
+
+  function followTabs(p) {
+    const losses = p.events.filter(isLoss);
+    const lists = p.lists;
+    const nameCell = (u) => esc(p.people[u]?.name);
+    return [
+      {
+        id: "lost", label: "Unfollowed you", count: losses.length,
+        desc: "Found by comparing each snapshot with the one before it.", empty: notYet([p]),
+        rows: (q) => sortEvents(losses.filter((e) => matchEvent(e, q))),
+        head: ["Who", "What happened", "When", "Now"],
+        row: (e) => [who(p, e.username) + newBadge(e), esc(LOSSES[e.kind]), esc(whenText(e)), nowText(e)],
+      },
+      {
+        id: "notFollowingBack", label: "Not following you back", count: lists.notFollowingBack.length,
+        desc: "You follow them, they don't follow you.", empty: "Everyone you follow follows you back.",
+        rows: (q) => sortNames(p, lists.notFollowingBack.filter((u) => match(p, u, q))),
+        head: ["Who", "Name", "You followed"],
+        row: (u) => [who(p, u), nameCell(u), esc(sinceText(p.people[u]?.youFollowSince))],
+      },
+      {
+        id: "fans", label: "You don't follow back", count: lists.fans.length,
+        desc: "They follow you, you don't follow them.", empty: "You follow back everyone who follows you.",
+        rows: (q) => sortNames(p, lists.fans.filter((u) => match(p, u, q))),
+        head: ["Who", "Name", "Followed you"],
+        row: (u) => [who(p, u), nameCell(u), esc(sinceText(p.people[u]?.followsYouSince))],
+      },
+      {
+        id: "mutual", label: "Mutual", count: lists.mutual.length,
+        desc: "You follow each other.", empty: "No mutual follows.",
+        rows: (q) => sortNames(p, lists.mutual.filter((u) => match(p, u, q))),
+        head: ["Who", "Name", "Follows you since"],
+        row: (u) => [who(p, u), nameCell(u), esc(sinceText(p.people[u]?.followsYouSince))],
+      },
+      historyTab(p),
+    ];
+  }
+
+  function historyTab(p) {
+    return {
+      id: "history", label: "History", count: p.events.length,
+      desc: "Every change between snapshots, newest day first.", empty: "Shows up after the second snapshot.",
+      rows: (q) => sortEvents(p.events.filter((e) => matchEvent(e, q))),
+      head: ["When", "Who", "Change"],
+      row: (e) => [esc(day(e.at)), who(p, e.username) + newBadge(e), change(e)],
+    };
+  }
+
+  const TABS = !current ? overviewTabs() : current.friends ? friendTabs(current) : followTabs(current);
+
+  // Open on History; a #hash in the URL (set when switching tabs) wins.
+  const hash = location.hash.slice(1);
+  let tab = TABS.some((t) => t.id === hash) ? hash : "history";
+
+  $("tabs").innerHTML = TABS.map((t) =>
+    `<button role="tab" data-tab="${t.id}">${t.label}<span class="count">${nf.format(t.count)}</span></button>`).join("");
+  $("tabs").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-tab]");
+    if (!b) return;
+    tab = b.dataset.tab;
+    history.replaceState(null, "", "#" + tab);
+    render();
+  });
+  $("q").addEventListener("input", render);
+
+  function render() {
+    const t = TABS.find((x) => x.id === tab);
+    document.querySelectorAll("#tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+    $("desc").textContent = t.desc;
+    const q = $("q").value.trim().toLowerCase().replace(/^@/, "");
+    const rows = t.rows(q);
+    $("panel").innerHTML = rows.length
+      ? `<table><thead><tr>${t.head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>` +
+        rows.map((r) => `<tr>${t.row(r).map((c) => `<td>${c ?? ""}</td>`).join("")}</tr>`).join("") +
+        `</tbody></table>`
+      : `<div class="empty">${q ? "No matches." : esc(t.empty)}</div>`;
+  }
+  render();
+
+  const first = (current ? [current] : active).map((p) => p.firstSnapshotAt).filter(Boolean).sort()[0];
+  $("footer").textContent = (data.nextRunAt ? `Next run ${dateTime(data.nextRunAt)}. ` : "") +
+    (first ? `Tracking since ${day(first)}.` : "");
+})();
+</script>
+</body>
+</html>

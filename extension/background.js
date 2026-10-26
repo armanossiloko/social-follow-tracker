@@ -1,4 +1,4 @@
-// Sends the instagram.com "sessionid" cookie to the local Following app:
+// Sends the instagram.com "sessionid" cookie to the local Social Connection Tracker app:
 // on install/startup, whenever the cookie changes (e.g. you logged in again), and hourly as a safety net.
 // The app ignores repeats, so the hourly send costs nothing and recovers if the app was down.
 

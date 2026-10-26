@@ -1,0 +1,225 @@
+using ConnectionTracker.Core;
+using ConnectionTracker.Core.Report;
+using ConnectionTracker.Web.Data;
+using ConnectionTracker.Web.Pages;
+using ConnectionTracker.Web.Services;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+
+const long maxUpload = 1L << 30; // full exports that include media can be large
+
+var builder = WebApplication.CreateBuilder(args);
+var section = builder.Configuration.GetSection(TrackerOptions.Section);
+var options = section.Get<TrackerOptions>() ?? new TrackerOptions();
+builder.Services.Configure<TrackerOptions>(section);
+
+builder.Services.AddDbContext<TrackerDb>(o => o
+    .UseNpgsql(builder.Configuration.GetConnectionString("Tracker"))
+    .UseSnakeCaseNamingConvention());
+builder.Services.AddDataProtection()
+    // The name predates the rename; changing it would make the stored credentials unreadable.
+    .SetApplicationName("following")
+    .PersistKeysToFileSystem(new DirectoryInfo(options.KeysPath));
+builder.Services.AddAntiforgery();
+builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = maxUpload);
+builder.WebHost.ConfigureKestrel(k => k.Limits.MaxRequestBodySize = maxUpload);
+
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<InstagramClientFactory>();
+builder.Services.AddSingleton<SteamClientFactory>();
+builder.Services.AddSingleton<JobRunner>();
+builder.Services.AddSingleton<SchedulerState>();
+builder.Services.AddScoped<SnapshotRepository>();
+builder.Services.AddScoped<InstagramSessionStore>();
+builder.Services.AddScoped<SteamAccountStore>();
+builder.Services.AddScoped<TrackerJobs>();
+builder.Services.AddScoped<InstagramSessionUpdater>();
+builder.Services.AddScoped<SteamAccountUpdater>();
+builder.Services.AddHostedService<DailyScheduler>();
+
+var app = builder.Build();
+
+await using (var scope = app.Services.CreateAsyncScope())
+    await scope.ServiceProvider.GetRequiredService<TrackerDb>().Database.MigrateAsync();
+
+app.UseAntiforgery();
+
+// Log every call from the browser extension (including rejected ones) so a broken setup is diagnosable.
+app.Use(async (http, next) =>
+{
+    await next(http);
+    if (http.Request.Path.StartsWithSegments("/api"))
+        app.Logger.LogInformation("{Method} {Path} from origin {Origin} -> {Status}",
+            http.Request.Method, http.Request.Path, http.Request.Headers.Origin.ToString() is { Length: > 0 } o ? o : "(none)", http.Response.StatusCode);
+});
+
+// Every state-changing endpoint checks the form token. The built-in middleware only checks requests that carry
+// form data, which would let another site trigger a bodiless POST (Fetch now, Remove cookie) from your browser.
+var forms = app.MapGroup("/settings").AddEndpointFilter(RequireFormToken);
+
+app.MapGet("/healthz", () => Results.Text("ok"));
+
+// The overview, and one page per platform. They're the same page showing different parts of the same data.
+app.MapGet("/", (HttpContext http, CancellationToken ct) => ReportPage(http, ReportBuilder.HomeView, ct));
+foreach (var platform in Platforms.All)
+    app.MapGet("/" + platform.Id, (HttpContext http, CancellationToken ct) => ReportPage(http, platform.Id, ct));
+
+// The report's Refresh button: starts a fetch of one platform (or all connected ones), then polls GET /refresh and
+// reloads once nothing is running.
+app.MapPost("/refresh", async (string? platform, JobRunner runner, TrackerJobs jobs, CancellationToken ct) =>
+{
+    var connected = await jobs.ConnectedAsync(ct);
+    if (platform is null)
+    {
+        if (connected.Count == 0)
+            return Results.Json(new { error = "Connect Instagram or Steam on the Settings page first." }, statusCode: StatusCodes.Status400BadRequest);
+        // If another job is already running (e.g. the daily run), the page just waits for that one instead.
+        runner.TryStart("Fetch", (j, c) => j.FetchAllAsync(c));
+    }
+    else
+    {
+        if (!connected.Contains(platform))
+            return Results.Json(new { error = $"{Platforms.Find(platform)?.Name ?? platform} isn't connected; see the Settings page." },
+                statusCode: StatusCodes.Status400BadRequest);
+        runner.TryStart($"{Platforms.Get(platform).Name} fetch", (j, c) => j.FetchAsync(platform, c));
+    }
+    return Results.Json(new { running = runner.Running });
+}).AddEndpointFilter(RequireFormToken);
+
+app.MapGet("/refresh", (JobRunner runner) => Results.Json(new { running = runner.Running }));
+
+app.MapGet("/settings", async (
+    HttpContext http, IAntiforgery antiforgery, SnapshotRepository repo, InstagramSessionStore session, SteamAccountStore steam,
+    JobRunner runner, SchedulerState scheduler, IOptions<TrackerOptions> opts,
+    string? msg, string? error, CancellationToken ct) =>
+{
+    var model = new SettingsModel(
+        antiforgery.GetAndStoreTokens(http),
+        error ?? msg,
+        error is not null,
+        await session.GetInfoAsync(ct),
+        await repo.LastRunAsync(RunKind.Fetch, Platforms.Instagram, okOnly: false, ct),
+        await steam.GetInfoAsync(ct),
+        await repo.LastRunAsync(RunKind.Fetch, Platforms.Steam, okOnly: false, ct),
+        await repo.LastRunAsync(RunKind.Import, Platforms.Facebook, okOnly: true, ct),
+        opts.Value.DailyAt,
+        opts.Value.RandomDelayMinutes,
+        scheduler.NextRunAt,
+        runner.Running,
+        opts.Value.ExportsPath,
+        await repo.RecentRunsAsync(20, ct));
+    return Results.Content(SettingsPage.Render(model), "text/html; charset=utf-8");
+});
+
+forms.MapPost("/session", async (HttpContext http, [FromForm] string sessionId, InstagramSessionUpdater updater, CancellationToken ct) =>
+{
+    var result = await updater.UpdateAsync(sessionId, SessionSource.Manual, sameAccountOnly: false, ct);
+    return result.Ok ? Back(http, result.Message) : Back(http, error: result.Message);
+});
+
+// The browser extension posts the sessionid cookie here: right after install, whenever it changes, and hourly.
+// Only that extension is accepted: browsers always send the real Origin, and a website can't claim to be an
+// extension. The app only contacts Instagram when the cookie actually changed.
+app.MapPost("/api/session", async (
+    HttpContext http, SessionCookie body, InstagramSessionUpdater updater, InstagramSessionStore session,
+    IOptions<TrackerOptions> opts, TimeProvider clock, CancellationToken ct) =>
+{
+    if (http.Request.Headers.Origin != $"chrome-extension://{opts.Value.ExtensionId}")
+        return Results.Json(new { error = "Only the Social Connection Tracker browser extension may post here." }, statusCode: StatusCodes.Status403Forbidden);
+    await session.MarkExtensionSeenAsync(clock.GetUtcNow(), ct);
+    var result = await updater.UpdateAsync(body.SessionId, SessionSource.Extension, sameAccountOnly: true, ct);
+    return result.Ok
+        ? Results.Json(new { message = result.Message, changed = result.Changed })
+        : Results.Json(new { error = result.Message }, statusCode: result.WrongAccount ? StatusCodes.Status409Conflict : StatusCodes.Status400BadRequest);
+});
+
+forms.MapPost("/session/remove", async (HttpContext http, InstagramSessionStore session, CancellationToken ct) =>
+{
+    await session.ClearSessionAsync(ct);
+    return Back(http, "Cookie removed. Instagram data now only comes from exports.");
+});
+
+forms.MapPost("/steam", async (HttpContext http, [FromForm] string? profile, [FromForm] string? apiKey, SteamAccountUpdater updater, CancellationToken ct) =>
+{
+    var (ok, message) = await updater.UpdateAsync(profile, apiKey, ct);
+    return ok ? Back(http, message) : Back(http, error: message);
+});
+
+forms.MapPost("/steam/remove", async (HttpContext http, SteamAccountStore steam, CancellationToken ct) =>
+{
+    await steam.ClearAsync(ct);
+    return Back(http, "Steam API key removed. Steam is no longer fetched; its history stays.");
+});
+
+forms.MapPost("/fetch", async (HttpContext http, JobRunner runner, TrackerJobs jobs, CancellationToken ct) =>
+{
+    if ((await jobs.ConnectedAsync(ct)).Count == 0)
+        return Back(http, error: "Connect Instagram or Steam first.");
+    return runner.TryStart("Fetch", (j, c) => j.FetchAllAsync(c))
+        ? Back(http, "Fetch started. It takes a minute or two; the result appears under Recent runs.")
+        : Back(http, error: $"{runner.Running ?? "Another job"} is already in progress; try again when it's done.");
+});
+
+forms.MapPost("/import", async (HttpContext http, IFormFile file, JobRunner runner, TimeProvider clock, CancellationToken ct) =>
+{
+    // The zip is read twice (hash, then contents), so buffer the upload in a seekable temp file.
+    await using var temp = new FileStream(
+        Path.GetTempFileName(), FileMode.Open, FileAccess.ReadWrite, FileShare.None, 81920, FileOptions.DeleteOnClose);
+    await file.CopyToAsync(temp, ct);
+    temp.Position = 0;
+    var name = Path.GetFileName(file.FileName);
+    var result = await runner.RunAsync("Import", (jobs, c) => jobs.ImportAsync(temp, name, clock.GetUtcNow(), force: false, c), ct);
+    return result.Ok ? Back(http, result.Message) : Back(http, error: result.Message);
+});
+
+app.Run();
+
+static async Task<IResult> ReportPage(HttpContext http, string view, CancellationToken ct)
+{
+    var services = http.RequestServices;
+    var repo = services.GetRequiredService<SnapshotRepository>();
+    var session = services.GetRequiredService<InstagramSessionStore>();
+    var steam = await services.GetRequiredService<SteamAccountStore>().GetInfoAsync(ct);
+    var runner = services.GetRequiredService<JobRunner>();
+    var snapshots = await repo.LoadAllAsync(ct);
+
+    async Task<PlatformReport> Report(string platform, string? account, string? accountUrl, bool connected) => new(
+        platform, snapshots[platform], account, accountUrl, connected,
+        SnapshotRepository.Summary(await repo.LastRunAsync(RunKind.Fetch, platform, okOnly: false, ct)),
+        SnapshotRepository.Summary(await repo.LastRunAsync(RunKind.Fetch, platform, okOnly: true, ct)));
+
+    var username = await session.GetUsernameAsync(ct);
+    var context = new ReportContext(
+        [
+            await Report(Platforms.Instagram, username is null ? null : "@" + username,
+                username is null ? null : $"https://www.instagram.com/{Uri.EscapeDataString(username)}/", await session.HasSessionAsync(ct)),
+            await Report(Platforms.Facebook, null, null, false),
+            await Report(Platforms.Steam, steam.Name, steam.ProfileUrl, steam.Connected),
+        ],
+        view,
+        services.GetRequiredService<SchedulerState>().NextRunAt,
+        services.GetRequiredService<TimeProvider>().GetUtcNow(),
+        runner.Running,
+        services.GetRequiredService<IAntiforgery>().GetAndStoreTokens(http).RequestToken);
+    return Results.Content(ReportBuilder.Render(context), "text/html; charset=utf-8");
+}
+
+static async ValueTask<object?> RequireFormToken(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+{
+    var antiforgery = context.HttpContext.RequestServices.GetRequiredService<IAntiforgery>();
+    return await antiforgery.IsRequestValidAsync(context.HttpContext)
+        ? await next(context)
+        : Results.BadRequest("Missing or invalid form token. Reload the page and try again.");
+}
+
+static IResult Back(HttpContext http, string? msg = null, string? error = null)
+{
+    var query = error is not null ? "?error=" + Uri.EscapeDataString(error)
+        : msg is not null ? "?msg=" + Uri.EscapeDataString(msg)
+        : "";
+    return Results.Redirect($"{http.Request.PathBase}/settings{query}");
+}
