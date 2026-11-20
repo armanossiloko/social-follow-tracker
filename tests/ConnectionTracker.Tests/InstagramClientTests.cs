@@ -56,6 +56,31 @@ public class InstagramClientTests
     }
 
     [Fact]
+    public async Task Requests_look_like_the_web_app_fetching_data()
+    {
+        // Without these Instagram treats the request as a page visit and answers with its HTML error page.
+        var handler = new FakeHandler(Json("""{"users": [], "status": "ok"}"""));
+
+        await Client(handler).GetListAsync(ConnectionList.Following);
+
+        var headers = handler.Requests[0].Headers;
+        Assert.Equal("cors", headers.GetValues("Sec-Fetch-Mode").Single());
+        Assert.Equal("same-origin", headers.GetValues("Sec-Fetch-Site").Single());
+        Assert.Equal("empty", headers.GetValues("Sec-Fetch-Dest").Single());
+    }
+
+    [Fact]
+    public async Task Web_page_instead_of_data_names_the_page()
+    {
+        var html = """<!DOCTYPE html><html><head><title>Instagram</title></head><body><script>{"canonicalRouteName":"comet.igweb.PolarisErrorRoute"}</script></body></html>""";
+        var handler = new FakeHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(html, Encoding.UTF8, "text/html") });
+
+        var e = await Assert.ThrowsAsync<InstagramException>(() => Client(handler).GetListAsync(ConnectionList.Followers));
+
+        Assert.Equal("Instagram answered /api/v1/friendships/12345/followers/ with a web page instead of data (HTTP 200, comet.igweb.PolarisErrorRoute).", e.Message);
+    }
+
+    [Fact]
     public async Task Redirect_to_login_means_the_session_expired()
     {
         var handler = new FakeHandler(_ =>

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -191,7 +192,15 @@ public sealed class InstagramClient
                 }
                 catch (JsonException)
                 {
-                    throw new InstagramException($"Unexpected non-JSON response (HTTP {status}) from {pathAndQuery.Split('?')[0]}");
+                    var path = pathAndQuery.Split('?')[0];
+                    var route = Regex.Match(body, "\"canonicalRouteName\":\"([^\"]+)\"") is { Success: true } r ? r.Groups[1].Value : null;
+                    // Enough to tell a login, checkpoint or error page apart next time without keeping the page.
+                    _log.LogWarning("Non-JSON answer from {Path}: HTTP {Status}, {ContentType}, {Length} chars, title {Title}, route {Route}",
+                        path, status, response.Content.Headers.ContentType?.MediaType ?? "(none)", body.Length,
+                        HtmlTitle(body) ?? "(none)", route ?? "(none)");
+                    throw new InstagramException(body.TrimStart().StartsWith('<')
+                        ? $"Instagram answered {path} with a web page instead of data (HTTP {status}{(route is null ? "" : ", " + route)})."
+                        : $"Unexpected non-JSON response (HTTP {status}) from {path}");
                 }
 
                 var root = doc.RootElement;
@@ -240,8 +249,18 @@ public sealed class InstagramClient
         request.Headers.TryAddWithoutValidation("X-IG-App-ID", WebAppId);
         request.Headers.TryAddWithoutValidation("X-Requested-With", "XMLHttpRequest");
         request.Headers.TryAddWithoutValidation("Referer", BaseUrl + "/");
+        // Since mid-November 2026 Instagram decides by these (it answers "Vary: Sec-Fetch-Site, Sec-Fetch-Mode"):
+        // without them an API URL is treated as a page visit and gets the HTML error page with HTTP 200.
+        request.Headers.TryAddWithoutValidation("Sec-Fetch-Dest", "empty");
+        request.Headers.TryAddWithoutValidation("Sec-Fetch-Mode", "cors");
+        request.Headers.TryAddWithoutValidation("Sec-Fetch-Site", "same-origin");
         return request;
     }
+
+    private static string? HtmlTitle(string body) =>
+        Regex.Match(body, @"<title[^>]*>\s*([^<]*?)\s*</title>", RegexOptions.IgnoreCase) is { Success: true } m
+            ? WebUtility.HtmlDecode(m.Groups[1].Value)
+            : null;
 
     private static int? IntProp(JsonElement element, string name) =>
         element.TryGetProperty(name, out var v) && v.TryGetInt32(out var n) ? n : null;
